@@ -71,7 +71,7 @@
 	"dependencies": {
 		"@fregante/mi-cron": "^2.0.0",
 		"@sindresorhus/to-milliseconds": "^2.0.0",
-		"abort-utils": "^1.2.0",
+		"abort-utils": "^1.3.0",
 		"batched-function": "^2.0.1",
 		"code-tag": "^1.2.0",
 		"debounce-fn": "^6.0.0",
