@@ -1,4 +1,4 @@
-import {$} from 'select-dom/strict.js';
+import {$, $$optional} from 'select-dom';
 
 type PrReference = {
 	/** @example fregante/mem:main */
@@ -20,13 +20,14 @@ type PrReference = {
 	nameWithOwner: string;
 };
 
-const absoluteReferenceRegex = /^(?<nameWithOwner>(?<owner>[^:/]+)\/(?<name>[^:]+)):(?<branch>.+)$/;
+const absoluteReferenceRegex = /^(?<nameWithOwner>(?<owner>[^/:]+)\/(?<name>[^:]+)):(?<branch>.+)$/;
 
 /**
- * @param absolute - The full reference, e.g. `fregante/mem:main`
- * @param relative - The references it appear to the user in the PR, e.g. "main" on same-repo PRs, "fregante:main" on cross-repo PRs
- * @example parseReferenceRaw('fregante/mem:main', 'main')
- */
+Extract branch info from the UI
+@param absolute - The full reference, e.g. `fregante/mem:main`
+@param relative - The references it appear to the user in the PR, e.g. "main" on same-repo PRs, "fregante:main" on cross-repo PRs
+@example parseReferenceRaw('fregante/mem:main', 'main')
+*/
 export function parseReferenceRaw(absolute: string, relative: string): PrReference {
 	const absoluteMatch = absoluteReferenceRegex.exec(absolute);
 	if (!absoluteMatch) {
@@ -52,17 +53,25 @@ export function parseReferenceRaw(absolute: string, relative: string): PrReferen
 }
 
 function parseReference(referenceElement: HTMLElement): PrReference {
-	const {title, textContent} = referenceElement;
-	return parseReferenceRaw(title, textContent.trim());
+	const {textContent, nextElementSibling} = referenceElement;
+	return parseReferenceRaw(nextElementSibling!.textContent.trim(), textContent.trim());
 }
 
 export function getBranches(): {base: PrReference; head: PrReference} {
 	return {
 		get base() {
-			return parseReference($('.base-ref'));
+			return parseReference($([
+				'[class*="PullRequestHeaderSummary"] a[class^="PullRequestBranchName"]',
+				'.base-ref', // TODO [2027-01-01]: Drop after legacy PR files view is removed
+			]));
 		},
 		get head() {
-			return parseReference($('.head-ref'));
+			return parseReference(
+				// Doesn't exist in old views
+				$$optional('[class*="PullRequestHeaderSummary"] a[class^="PullRequestBranchName"]')?.[1]
+					// TODO [2027-01-01]: Drop after legacy PR files view is removed
+					?? $('.head-ref'),
+			);
 		},
 	};
 }

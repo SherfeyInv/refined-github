@@ -1,20 +1,19 @@
-import React from 'dom-chef';
-import {$} from 'select-dom/strict.js';
-import TrashIcon from 'octicons-plain-react/Trash';
-import * as pageDetect from 'github-url-detection';
 import delegate, {type DelegateEvent} from 'delegate-it';
+import React from 'dom-chef';
+import * as pageDetect from 'github-url-detection';
+import TrashIcon from 'octicons-plain-react/Trash';
+import {$, closestElement} from 'select-dom';
 import {isChrome} from 'webext-detect';
 
 import features from '../feature-manager.js';
-import observe from '../helpers/selector-observer.js';
 import loadDetailsMenu from '../github-helpers/load-details-menu.js';
 import showToast from '../github-helpers/toast.js';
+import observe from '../helpers/selector-observer.js';
 
 function onButtonClick({delegateTarget: button}: DelegateEvent): void {
 	try {
-		button
-			.closest('.js-comment')!
-			.querySelector('.show-more-popover .js-comment-delete > button')!
+		closestElement('.js-comment', button)
+			.querySelector(':scope .show-more-popover .js-comment-delete > button')!
 			.click();
 	} catch (error) {
 		void showToast(new Error('Feature broken. Please open an issue with the link found in the console'));
@@ -23,13 +22,13 @@ function onButtonClick({delegateTarget: button}: DelegateEvent): void {
 }
 
 async function preloadDropdown({delegateTarget: button}: DelegateEvent): Promise<void> {
-	const comment = button.closest('.js-comment')!;
+	const comment = closestElement('.js-comment', button);
 	await loadDetailsMenu($('details-menu.show-more-popover', comment));
 }
 
 function addDeleteButton(cancelButton: Element): void {
-	cancelButton.after(
-		<button className="btn btn-danger float-left rgh-review-comment-delete-button" type="button">
+	cancelButton.before(
+		<button className="btn btn-danger float-left mr-auto rgh-review-comment-delete-button" type="button">
 			<TrashIcon />
 		</button>,
 	);

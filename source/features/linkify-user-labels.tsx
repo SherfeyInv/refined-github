@@ -1,30 +1,58 @@
+import './linkify-user-labels.css';
+
 import React from 'dom-chef';
 import * as pageDetect from 'github-url-detection';
+import {$, $optional, closestElementOptional} from 'select-dom';
 
-import {wrap} from '../helpers/dom-utils.js';
 import features from '../feature-manager.js';
-import {buildRepoURL} from '../github-helpers/index.js';
 import getCommentAuthor from '../github-helpers/get-comment-author.js';
+import {buildRepoUrl} from '../github-helpers/index.js';
+import {is} from '../helpers/css-selectors.js';
+import {wrap} from '../helpers/dom-utils.js';
 import observe from '../helpers/selector-observer.js';
 
-function linkify(label: Element): void {
-	if (label.closest('a')) {
+function getAuthor(label: HTMLElement): string {
+	const prMetadataRow = closestElementOptional('.opened-by', label);
+	if (!prMetadataRow) {
+		return getCommentAuthor(label);
+	}
+
+	const userPrsLink = $('a[data-hovercard-type="user"]', prMetadataRow);
+	// The link always ends with author
+	const username = userPrsLink.href.split('author%3A', 2)[1];
+	return username;
+}
+
+function linkify(label: HTMLElement): void {
+	if (closestElementOptional('a', label)) {
 		throw new Error('Already linkified, feature needs to be updated');
 	}
 
-	const url = new URL(buildRepoURL('commits'));
-	url.searchParams.set('author', getCommentAuthor(label));
-	wrap(label, <a className="Link--secondary" href={url.href} />);
+	// React might create a new label without removing the old one
+	// https://github.com/refined-github/refined-github/issues/8478
+	$optional('.rgh-linkify-user-labels', label.parentElement!)?.remove();
+
+	const url = new URL(buildRepoUrl('commits'));
+	url.searchParams.set('author', getAuthor(label));
+	wrap(label, <a className="Link--onHover no-underline color-fg-inherit rgh-linkify-user-labels" href={url.href} />);
 }
 
+const ariaLabelSelector = is(
+	'[aria-label^="This user is a member"]',
+	'[aria-label^="This user has previously committed"]',
+	'[aria-label^="This user has been invited to collaborate"]',
+);
+
 function init(signal: AbortSignal): void {
-	observe([
-		'span[data-testid="comment-author-association"][aria-label*="a member of the"]',
-		'span[data-testid="comment-author-association"][aria-label^="This user has previously committed"]',
-		// PRs and pre-issue redesign 2024
-		'.tooltipped[aria-label*="a member of the"]',
-		'.tooltipped[aria-label^="This user has previously committed"]',
-	], linkify, {signal});
+	observe(
+		[
+			'span[data-testid="comment-author-association"]' + ariaLabelSelector,
+			// PRs
+			'.tooltipped' + ariaLabelSelector,
+		],
+		linkify,
+		{signal},
+	);
 }
 
 void features.add(import.meta.url, {
@@ -32,12 +60,14 @@ void features.add(import.meta.url, {
 		pageDetect.isRepo,
 	],
 	include: [
+		pageDetect.isPRList,
 		pageDetect.hasComments,
 	],
 	init,
 });
 
 /*
+
 Test URLs:
 
 Bot PR
@@ -60,4 +90,14 @@ https://github.com/refined-github/refined-github/pull/5691#discussion_r895192800
 
 Contributor review second comment in Files tab
 https://github.com/refined-github/refined-github/pull/2667/files#r366433031
+
+Member comment on issue
+https://github.com/refined-github/sandbox/issues/74#issuecomment-2143792189
+
+Collaborator review comment
+https://github.com/editorconfig/editorconfig-emacs/pull/389/changes#r2809824690
+
+Pull requests from a contributor
+https://github.com/refined-github/refined-github/pulls?q=is%3Apr+author%3Anotlmn
+
 */

@@ -1,21 +1,21 @@
+import React from 'dom-chef';
+import * as pageDetect from 'github-url-detection';
+import RepoIcon from 'octicons-plain-react/Repo';
+import {closestElement} from 'select-dom';
 import twas from 'twas';
 import {CachedFunction} from 'webext-storage-cache';
-import React from 'dom-chef';
-import RepoIcon from 'octicons-plain-react/Repo';
-import elementReady from 'element-ready';
-import * as pageDetect from 'github-url-detection';
 
 import features from '../feature-manager.js';
 import api from '../github-helpers/api.js';
-import {cacheByRepo} from '../github-helpers/index.js';
-import GetRepoAge from './repo-age.gql';
-import GetFirstCommit from './repo-age-first-commit.gql';
+import {buildRepoUrl, cacheByRepo} from '../github-helpers/index.js';
 import {randomArrayItem} from '../helpers/math.js';
+import observe from '../helpers/selector-observer.js';
+import GetFirstCommit from './repo-age-first-commit.gql';
+import GetRepoAge from './repo-age.gql';
 
 type CommitTarget = {
 	oid: string;
 	committedDate: string;
-	resourcePath: string;
 	history: {
 		totalCount: number;
 	};
@@ -37,35 +37,42 @@ const fresh = [
 	'So it begins, the great battle of our time',
 ];
 
-const dateFormatter = new Intl.DateTimeFormat('en-US', {
-	year: 'numeric',
-	month: 'long',
-	day: 'numeric',
-});
+function buildLastCommitsPageUrl(commitSha: string, commitsCount: number): string {
+	if (commitsCount <= 2) {
+		return buildRepoUrl('commits');
+	}
 
-async function getRepoAge(commitSha: string, commitsCount: number): Promise<[committedDate: string, resourcePath: string]> {
+	const offset = commitsCount - 2;
+	return buildRepoUrl('commits', `?after=${commitSha}+${offset}`);
+}
+
+async function getRepoAge(
+	commitSha: string,
+	commitsCount: number,
+): Promise<[committedDate: string, lastCommitsPageUrl: string]> {
 	const {repository} = await api.v4(GetRepoAge, {
 		variables: {
 			cursor: `${commitSha} ${commitsCount - Math.min(6, commitsCount)}`,
 		},
 	});
 
-	const {committedDate, resourcePath} = repository.defaultBranchRef.target.history.nodes
-		.reverse()
+	const {committedDate} = repository.defaultBranchRef.target.history.nodes
 		// Filter out any invalid commit dates #3185
-		.find((commit: CommitTarget) => new Date(commit.committedDate).getFullYear() > 1970);
+		.findLast((commit: CommitTarget) => new Date(commit.committedDate).getFullYear() > 1970);
 
-	return [committedDate, resourcePath];
+	const lastCommitsPageUrl = buildLastCommitsPageUrl(commitSha, commitsCount);
+	return [committedDate, lastCommitsPageUrl];
 }
 
 const firstCommit = new CachedFunction('first-commit', {
-	async updater(): Promise<[committedDate: string, resourcePath: string]> {
+	async updater(): Promise<[committedDate: string, lastCommitsPageUrl: string]> {
 		const {repository} = await api.v4(GetFirstCommit);
 
-		const {oid: commitSha, history, committedDate, resourcePath} = repository.defaultBranchRef.target as CommitTarget;
+		const {oid: commitSha, history, committedDate} = repository.defaultBranchRef.target as CommitTarget;
 		const commitsCount = history.totalCount;
 		if (commitsCount === 1) {
-			return [committedDate, resourcePath];
+			const lastCommitsPageUrl = buildLastCommitsPageUrl(commitSha, commitsCount);
+			return [committedDate, lastCommitsPageUrl];
 		}
 
 		return getRepoAge(commitSha, commitsCount);
@@ -73,30 +80,43 @@ const firstCommit = new CachedFunction('first-commit', {
 	cacheKey: cacheByRepo,
 });
 
-async function init(): Promise<void> {
-	const [firstCommitDate, firstCommitHref] = await firstCommit.get();
+async function addRepoAge(sidebarForksLinkIcon: HTMLElement): Promise<void> {
+	// Construct class only when it's needed, as it is relatively expensive
+	const dateFormatter = new Intl.DateTimeFormat('en-US', {
+		year: 'numeric',
+		month: 'long',
+		day: 'numeric',
+	});
+
+	const [firstCommitDate, lastCommitsPageUrl] = await firstCommit.get();
 	const birthday = new Date(firstCommitDate);
 
 	// `twas` could also return `an hour ago` or `just now`
 	const [value, unit] = twas(birthday.getTime())
 		.replace('just now', '1 second')
 		.replace(/^an?/, '1')
-		.split(' ');
+		.split(' ', 2);
 
 	// About a day old or less ?
 	const age = Date.now() - birthday.getTime() < 10e7
 		? randomArrayItem(fresh)
-		: <><strong>{value}</strong> {unit} old</>;
+		: <>
+			<strong>{value}</strong> {unit} old
+		</>;
 
-	const sidebarForksLinkIcon = await elementReady('.BorderGrid .octicon-repo-forked');
-	sidebarForksLinkIcon!.closest('.mt-2')!.append(
+	closestElement('.mt-2', sidebarForksLinkIcon).after(
 		<h3 className="sr-only">Repository age</h3>,
-		<div className="mt-2">
-			<a href={firstCommitHref} className="Link--muted" title={`First commit dated ${dateFormatter.format(birthday)}`}>
-				<RepoIcon className="mr-2" /> {age}
+		<div className="mt-2 tmp-mt-2">
+			<a href={lastCommitsPageUrl} className="Link--muted" title={`First commit dated ${dateFormatter.format(birthday)}`}>
+				<RepoIcon className="mr-2 tmp-mr-2" /> {age}
 			</a>
 		</div>,
 	);
+}
+
+async function init(signal: AbortSignal): Promise<void> {
+	// Use the observer because React replaces the sidebar’s subtree during hydration, discarding the element we inserted
+	observe('[class*="PageLayout-Pane"] .octicon-repo-forked', addRepoAge, {signal});
 }
 
 void features.add(import.meta.url, {
@@ -106,7 +126,7 @@ void features.add(import.meta.url, {
 	exclude: [
 		pageDetect.isEmptyRepoRoot,
 	],
-	deduplicate: 'has-rgh-inner',
+	requiresToken: true,
 	init,
 });
 
@@ -116,5 +136,6 @@ Test URLs:
 
 https://github.com/refined-github/sandbox
 https://github.com/refined-github/sandbox/tree/6619
+https://github.com/bfred-it/bfred-it.github.io
 
 */

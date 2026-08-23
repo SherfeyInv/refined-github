@@ -1,42 +1,52 @@
+/* eslint-disable no-await-in-loop -- Event loops */
 import React from 'dom-chef';
-import {elementExists} from 'select-dom';
 import domLoaded from 'dom-loaded';
-import stripIndent from 'strip-indent';
-import type {Promisable} from 'type-fest';
 import * as pageDetect from 'github-url-detection';
+import oneEvent from 'one-event';
+import {elementExists} from 'select-dom';
+import stripIndent from 'strip-indent';
+import type {Arrayable, Promisable} from 'type-fest';
 import {isWebPage} from 'webext-detect';
 import {messageRuntime} from 'webext-msg';
-import oneEvent from 'one-event';
 
-import waitFor from './helpers/wait-for.js';
-import ArrayMap from './helpers/map-of-arrays.js';
+import {expectToken} from './github-helpers/github-token.js';
+import asyncForEach from './helpers/async-for-each.js';
 import bisectFeatures from './helpers/bisect.js';
-import {
-	type BooleanFunction,
-	shouldFeatureRun,
-	isFeaturePrivate,
-	type RunConditions,
-} from './helpers/feature-utils.js';
-import optionsStorage, {isFeatureDisabled, type RGHOptions} from './options-storage.js';
+import {catchErrors, disableErrorLogging} from './helpers/errors.js';
+import {getFeatureId, listenToAjaxedLoad, log, shortcutMap} from './helpers/feature-helpers.js';
+import {isFeaturePrivate, type RunConditions, shouldFeatureRun} from './helpers/feature-utils.js';
 import {
 	applyStyleHotfixes,
-	getLocalHotfixesAsOptions,
-	preloadSyncLocalStrings,
 	brokenFeatures,
+	brokenFeaturesAsOptions,
+	preloadSyncLocalStrings,
 } from './helpers/hotfix.js';
-import asyncForEach from './helpers/async-for-each.js';
-import {catchErrors, disableErrorLogging} from './helpers/errors.js';
-import {getFeatureID, listenToAjaxedLoad, log, shortcutMap} from './helpers/feature-helpers.js';
+import ArrayMap from './helpers/map-of-arrays.js';
+import waitFor from './helpers/wait-for.js';
+import optionsStorage, {isFeatureDisabled, type RghOptions} from './options-storage.js';
+import {contentScriptToggle} from './options/reload-without.js';
 
 type FeatureInitResult = void | false;
 type FeatureInit = (signal: AbortSignal) => Promisable<FeatureInitResult>;
 
 type FeatureLoader = RunConditions & {
-	/** This only adds the shortcut to the help screen, it doesn't enable it. @default {} */
+	/**
+	 This only adds the shortcut to the help screen, it doesn't enable it.
+	 @default {}
+	*/
 	shortcuts?: Record<string, string>;
 
-	/** Whether to wait for DOM ready before running `init`. By default, it runs `init` as soon as `body` is found. @default false */
+	/**
+	 Whether to wait for DOM ready before running `init`. By default, it runs `init` as soon as `body` is found.
+	 @default false
+	*/
 	awaitDomReady?: true;
+
+	/**
+	 Whether to require a personal token before running `init`.
+	 @default false
+	*/
+	requiresToken?: true;
 
 	/**
 	When pressing the back button, DOM changes and listeners are still there. Using a selector here would use the integrated deduplication logic, but it cannot be used with `delegate` and it shouldn't use `has-rgh` and `has-rgh-inner` anymore. #5871
@@ -48,22 +58,41 @@ type FeatureLoader = RunConditions & {
 	init: Arrayable<FeatureInit>;
 };
 
-const currentFeatureControllers = new ArrayMap<FeatureID, AbortController>();
+const currentFeatureControllers = new ArrayMap<FeatureId, AbortController>();
+
+function unloadAll(): void {
+	for (const feature of currentFeatureControllers.values()) {
+		for (const controller of feature) {
+			controller.abort();
+		}
+	}
+
+	currentFeatureControllers.clear();
+}
 
 // eslint-disable-next-line no-async-promise-executor -- Rule assumes we don't want to leave it pending
-const globalReady = new Promise<RGHOptions>(async resolve => {
+const globalReady = new Promise<RghOptions>(async resolve => {
 	if (!isWebPage()) {
 		throw new Error('This script should only be run on web pages');
 	}
 
 	listenToAjaxedLoad();
 
-	const [options, localHotfixes, bisectedFeatures] = await Promise.all([
+	const [options, willLoadContentScripts, localHotfixes, bisectedFeatures] = await Promise.all([
 		optionsStorage.getAll(),
-		getLocalHotfixesAsOptions(),
+		contentScriptToggle.get(),
+		brokenFeatures.getCached(), // Cached first, they're fetched asynchronously down below
 		bisectFeatures(),
 		preloadSyncLocalStrings(),
 	]);
+
+	if (!willLoadContentScripts) {
+		await contentScriptToggle.remove();
+		const message = 'Refined GitHub: scripts were disabled for this load, but CSS can’t be disabled this way.';
+		console.warn(message);
+		alert(message);
+		return;
+	}
 
 	log.setup(options);
 
@@ -91,17 +120,19 @@ const globalReady = new Promise<RGHOptions>(async resolve => {
 	// https://github.com/refined-github/refined-github/issues/6433
 	void messageRuntime<string>({getStyleHotfixes: true}).then(applyStyleHotfixes);
 
-	if (options.customCSS.trim().length > 0) {
+	if (options.customCss.trim().length > 0) {
 		// Review #5857 and #5493 before making changes
-		document.head.append(<style>{options.customCSS}</style>);
+		document.head.append(<style>{options.customCss}</style>);
 	}
 
 	if (bisectedFeatures) {
 		Object.assign(options, bisectedFeatures);
 	} else {
-		// If features are remotely marked as "seriously breaking" by the maintainers, disable them without having to wait for proper updates to propagate #3529
+		// Use cached first
+		Object.assign(options, brokenFeaturesAsOptions(localHotfixes));
+
+		// Asynchronously fetch the rest, if expired
 		void brokenFeatures.get();
-		Object.assign(options, localHotfixes);
 	}
 
 	if (elementExists('body.logged-out')) {
@@ -124,12 +155,30 @@ function castArray<Item>(value: Arrayable<Item>): Item[] {
 }
 
 async function add(url: string, ...loaders: FeatureLoader[]): Promise<void> {
-	const id = getFeatureID(url);
+	const id = getFeatureId(url);
+
 	/* Feature filtering and running */
 	const options = await globalReady;
+
 	// Skip disabled features, unless the feature is private
 	if (isFeatureDisabled(options, id) && !isFeaturePrivate(id)) {
-		log.info('↩️', 'Skipping', id);
+		if (loaders.length === 0) {
+			// CSS-only https://github.com/refined-github/refined-github/issues/7944
+			// GitHub cleans up the CSS disabling attributes after navigation.
+			// https://github.com/refined-github/refined-github/issues/8172
+			do {
+				document.documentElement.setAttribute('rgh-OFF-' + id, '');
+				log.info('↩️', 'Skipping', id);
+			} while (await oneEvent(document, ['turbo:render', 'soft-nav:react-done']));
+		} else {
+			log.info('↩️', 'Skipping', id);
+		}
+
+		return;
+	}
+
+	if (loaders.length === 0) {
+		// CSS-only
 		return;
 	}
 
@@ -142,6 +191,7 @@ async function add(url: string, ...loaders: FeatureLoader[]): Promise<void> {
 			exclude,
 			init,
 			awaitDomReady = false,
+			requiresToken = false,
 			deduplicate = false,
 		} = loader;
 
@@ -149,20 +199,15 @@ async function add(url: string, ...loaders: FeatureLoader[]): Promise<void> {
 			throw new Error(`${id}: \`include\` cannot be an empty array, it means "run nowhere"`);
 		}
 
-		// 404 pages should only run 404-only features
-		if (pageDetect.is404() && !include?.includes(pageDetect.is404) && !asLongAs?.includes(pageDetect.is404)) {
-			return;
-		}
-
-		/* eslint-disable no-await-in-loop -- It's a, ahem, *event loop* */
-		let firstLoop = true;
+		let isFirstLoop = true;
 		do {
 			if (awaitDomReady) {
 				await domLoaded;
 			}
-			if (firstLoop) {
-				firstLoop = false;
-			} else if (deduplicate && elementExists(deduplicate)) {
+
+			if (isFirstLoop) {
+				isFirstLoop = false;
+			} else if (deduplicate !== false && elementExists(deduplicate)) {
 				continue;
 			}
 
@@ -170,14 +215,18 @@ async function add(url: string, ...loaders: FeatureLoader[]): Promise<void> {
 				continue;
 			}
 
+			if (requiresToken) {
+				await expectToken();
+			}
+
 			const featureController = new AbortController();
 			currentFeatureControllers.append(id, featureController);
 
 			// Do not await, or else an error on a page will break the feature completely until a reload
-			void asyncForEach(castArray(init), async init => {
-				const result = await init(featureController.signal);
+			void asyncForEach(castArray(init), async singleInit => {
+				const didRun = await singleInit(featureController.signal);
 				// Features can return `false` when they decide not to run on the current page
-				if (result !== false && !isFeaturePrivate(id)) {
+				if (didRun !== false && !isFeaturePrivate(id)) {
 					log.info('✅', id);
 					// Register feature shortcuts
 					for (const [hotkey, description] of Object.entries(shortcuts)) {
@@ -185,35 +234,19 @@ async function add(url: string, ...loaders: FeatureLoader[]): Promise<void> {
 					}
 				}
 			});
-		} while (await oneEvent(document, 'turbo:render'));
+		} while (await oneEvent(document, ['turbo:render', 'soft-nav:react-done']));
 	});
 }
 
-async function addCssFeature(url: string, include?: BooleanFunction[]): Promise<void> {
-	const id = getFeatureID(url);
-	void add(id, {
-		include,
-		init() {
-			document.documentElement.setAttribute('rgh-' + id, '');
-		},
-	});
+async function addCssFeature(url: string): Promise<void> {
+	void add(url);
 }
 
 function unload(featureUrl: string): void {
-	const id = getFeatureID(featureUrl);
+	const id = getFeatureId(featureUrl);
 	for (const controller of currentFeatureControllers.get(id) ?? []) {
 		controller.abort();
 	}
-}
-
-function unloadAll(): void {
-	for (const feature of currentFeatureControllers.values()) {
-		for (const controller of feature) {
-			controller.abort();
-		}
-	}
-
-	currentFeatureControllers.clear();
 }
 
 const features = {

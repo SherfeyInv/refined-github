@@ -1,16 +1,16 @@
-import {CachedFunction} from 'webext-storage-cache';
 import elementReady from 'element-ready';
 import type {NameWithOwner} from 'github-url-detection';
+import {CachedFunction} from 'webext-storage-cache';
 
 import api from './api.js';
+import GetDefaultBranch from './get-default-branch.gql';
 import {extractCurrentBranchFromBranchPicker, getRepo} from './index.js';
 import {branchSelector} from './selectors.js';
-import GetDefaultBranch from './get-default-branch.gql';
 
-const isCurrentRepo = (nameWithOwner: NameWithOwner): boolean => Boolean(getRepo()?.nameWithOwner === nameWithOwner);
+const isCurrentRepo = (nameWithOwner: NameWithOwner): boolean => getRepo()?.nameWithOwner === nameWithOwner;
 
 // Do not make this function complicated. We're only optimizing for the repo root.
-async function fromDOM(): Promise<string | undefined> {
+async function fromDom(): Promise<string | undefined> {
 	if (!['', 'commits'].includes(getRepo()!.path)) {
 		return;
 	}
@@ -27,8 +27,8 @@ async function fromDOM(): Promise<string | undefined> {
 	return extractCurrentBranchFromBranchPicker(element);
 }
 
-async function fromAPI(repository: NameWithOwner): Promise<string> {
-	const [owner, name] = repository.split('/');
+async function fromApi(repository: NameWithOwner): Promise<string> {
+	const [owner, name] = repository.split('/', 2);
 	const response = await api.v4(GetDefaultBranch, {
 		variables: {
 			owner,
@@ -39,15 +39,16 @@ async function fromAPI(repository: NameWithOwner): Promise<string> {
 	return response.repository.defaultBranchRef.name;
 }
 
-// DO NOT use optional arguments/defaults in "cached functions" because they can't be memoized effectively
-// https://github.com/sindresorhus/eslint-plugin-unicorn/issues/1864
 export const defaultBranchOfRepo = new CachedFunction('default-branch', {
+	// DO NOT use optional arguments/defaults in "cached functions" because they can't be memoized effectively
+	// https://github.com/sindresorhus/eslint-plugin-unicorn/issues/1864
 	async updater(repository: NameWithOwner): Promise<string> {
 		if (!repository) {
 			throw new Error('getDefaultBranch was called on a non-repository page');
 		}
 
-		return (isCurrentRepo(repository) && await fromDOM()) || fromAPI(repository);
+		// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- Wrong, type can be `false`
+		return (isCurrentRepo(repository) && await fromDom()) || fromApi(repository);
 	},
 
 	maxAge: {hours: 1},

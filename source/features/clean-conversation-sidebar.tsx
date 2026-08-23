@@ -1,14 +1,13 @@
 import './clean-conversation-sidebar.css';
 
 import React from 'dom-chef';
-import {elementExists} from 'select-dom';
-import {$, $optional} from 'select-dom/strict.js';
 import * as pageDetect from 'github-url-detection';
+import {$, $optional, closestElement, elementExists} from 'select-dom';
 
 import features from '../feature-manager.js';
+import {removeTextNodeContaining} from '../helpers/dom-utils.js';
 import onElementRemoval from '../helpers/on-element-removal.js';
 import observe from '../helpers/selector-observer.js';
-import {removeTextNodeContaining} from '../helpers/dom-utils.js';
 
 // Don't cache: https://github.com/refined-github/refined-github/issues/7283
 const canEditSidebar = (): boolean => elementExists('.discussion-sidebar-item [data-hotkey="l"]');
@@ -65,11 +64,11 @@ function cleanSection(selector: string): boolean {
 		'details:has(> .discussion-sidebar-heading)', // Can edit sidebar, has a dropdown
 		'.discussion-sidebar-heading', // Cannot editor sidebar, has a plain heading
 	], container);
-	if (heading.closest(['form', '.discussion-sidebar-item'])!.querySelector(identifiers)) {
+	if (closestElement(['form', '.discussion-sidebar-item'], heading).querySelector(identifiers)) {
 		return false;
 	}
 
-	const section = container.closest('.discussion-sidebar-item')!;
+	const section = closestElement('.discussion-sidebar-item', container);
 	if (canEditSidebar()) {
 		getNodesAfter(heading).deleteContents();
 		section.classList.add('rgh-clean-sidebar');
@@ -80,13 +79,13 @@ function cleanSection(selector: string): boolean {
 	return true;
 }
 
-async function cleanSidebar(): Promise<void> {
-	$('#partial-discussion-sidebar').classList.add('rgh-clean-sidebar');
+async function cleanSidebarLegacy(sidebar: HTMLElement): Promise<void> {
+	sidebar.classList.add('rgh-clean-sidebar');
 
 	// Assignees
 	const assignees = $('.js-issue-assignees');
 	if (assignees.children.length === 0) {
-		assignees.closest('.discussion-sidebar-item')!.remove();
+		closestElement('.discussion-sidebar-item', assignees).remove();
 	} else {
 		const assignYourself = $optional('.js-issue-assign-self');
 		if (assignYourself) {
@@ -94,7 +93,7 @@ async function cleanSidebar(): Promise<void> {
 			$('[aria-label="Select assignees"] summary').append(
 				<span style={{fontWeight: 'normal'}}> – {assignYourself}</span>,
 			);
-			assignees.closest('.discussion-sidebar-item')!.classList.add('rgh-clean-sidebar');
+			closestElement('.discussion-sidebar-item', assignees).classList.add('rgh-clean-sidebar');
 		}
 	}
 
@@ -111,17 +110,17 @@ async function cleanSidebar(): Promise<void> {
 	}
 
 	// Development (linked issues/PRs)
-	const developmentHint = $optional('[aria-label="Link issues"] p');
+	const developmentHint = $optional('[aria-label="Link issues"] > p');
 	if (developmentHint) { // This may not exist if issues are disabled
 		removeTextNodeContaining(developmentHint, /No branches or pull requests|Successfully merging/);
 	}
 
-	const createBranchLink = $optional('button[data-action="click:create-branch#openDialog"]');
+	const branchCreationButton = $optional('button[data-action="click:create-branch#openDialog"]');
 	const openWorkspaceButton = $optional('a[href^="https://copilot-workspace.githubnext.com"]');
-	if (createBranchLink && !openWorkspaceButton) {
-		createBranchLink.classList.add('Link--muted', 'Link--inTextBlock');
+	if (branchCreationButton && !openWorkspaceButton) {
+		branchCreationButton.classList.add('Link--muted', 'Link--inTextBlock');
 		$('[aria-label="Link issues"] summary').append(
-			<span style={{fontWeight: 'normal'}}> – {createBranchLink}</span>,
+			<span style={{fontWeight: 'normal'}}> – {branchCreationButton}</span>,
 		);
 	}
 
@@ -135,7 +134,7 @@ async function cleanSidebar(): Promise<void> {
 }
 
 function init(signal: AbortSignal): void {
-	observe('#partial-discussion-sidebar', cleanSidebar, {signal});
+	observe('#partial-discussion-sidebar', cleanSidebarLegacy, {signal});
 }
 
 void features.add(import.meta.url, {
@@ -145,6 +144,8 @@ void features.add(import.meta.url, {
 	awaitDomReady: true, // The sidebar is at the end of the page + it needs to be fully loaded
 	init,
 });
+
+void features.addCssFeature(import.meta.url);
 
 /*
 

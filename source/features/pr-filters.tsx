@@ -1,38 +1,34 @@
 import React from 'dom-chef';
-import {CachedFunction} from 'webext-storage-cache';
-import {$} from 'select-dom/strict.js';
-import CheckIcon from 'octicons-plain-react/Check';
 import * as pageDetect from 'github-url-detection';
+import CheckIcon from 'octicons-plain-react/Check';
+import {$} from 'select-dom';
+import {CachedFunction} from 'webext-storage-cache';
 
 import features from '../feature-manager.js';
 import api from '../github-helpers/api.js';
-import observe from '../helpers/selector-observer.js';
 import {cacheByRepo} from '../github-helpers/index.js';
+import SearchQuery from '../github-helpers/search-query.js';
+import observe from '../helpers/selector-observer.js';
 import HasChecks from './pr-filters.gql';
-import {expectToken} from '../github-helpers/github-token.js';
 
 const reviewsFilterSelector = '#reviews-select-menu';
 
 function addDropdownItem(dropdown: HTMLElement, title: string, filterCategory: string, filterValue: string): void {
 	const filterQuery = `${filterCategory}:${filterValue}`;
 
-	const searchParameter = new URLSearchParams(location.search);
-	const currentQuerySegments = searchParameter.get('q')?.split(/\s+/) ?? [];
-	const isSelected = currentQuerySegments.some(
-		segment => segment.toLowerCase() === filterQuery,
-	);
+	const searchQuery = SearchQuery.from(location);
+	const isSelected = searchQuery.includes(filterQuery);
 
-	const query = currentQuerySegments.filter(
-		segment => !segment.startsWith(`${filterCategory}:`),
-	).join(' ');
+	const filtersToRemove = searchQuery.getQueryParts().filter(part => part.startsWith(`${filterCategory}:`));
+	searchQuery.remove(...filtersToRemove);
 
-	const search = new URLSearchParams({
-		q: query + (isSelected ? '' : ` ${filterQuery}`),
-	});
+	if (!isSelected) {
+		searchQuery.append(filterQuery);
+	}
 
 	dropdown.append(
 		<a
-			href={`?${String(search)}`}
+			href={searchQuery.href}
 			className="SelectMenu-item"
 			aria-checked={isSelected ? 'true' : 'false'}
 			role="menuitemradio"
@@ -73,7 +69,7 @@ async function addChecksFilter(reviewsFilter: HTMLElement): Promise<void> {
 	const checksFilter = reviewsFilter.cloneNode(true);
 	checksFilter.id = '';
 
-	$('summary', checksFilter).firstChild!.textContent = 'Checks\u00A0'; // Only replace text node, keep caret
+	$('summary', checksFilter).firstChild!.textContent = 'Checks\u{A0}'; // Only replace text node, keep caret
 	$('.SelectMenu-title', checksFilter).textContent = 'Filter by checks status';
 
 	const dropdown = $('.SelectMenu-list', checksFilter);
@@ -87,7 +83,6 @@ async function addChecksFilter(reviewsFilter: HTMLElement): Promise<void> {
 }
 
 async function init(signal: AbortSignal): Promise<void> {
-	await expectToken();
 	observe(reviewsFilterSelector, addChecksFilter, {signal});
 	observe(`${reviewsFilterSelector} .SelectMenu-list`, addDraftFilter, {signal});
 }
@@ -96,6 +91,7 @@ void features.add(import.meta.url, {
 	include: [
 		pageDetect.isPRList,
 	],
+	requiresToken: true,
 	init,
 });
 

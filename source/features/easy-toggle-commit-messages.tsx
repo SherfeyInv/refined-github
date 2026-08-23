@@ -1,26 +1,33 @@
-import {$optional} from 'select-dom/strict.js';
-import * as pageDetect from 'github-url-detection';
 import delegate, {type DelegateEvent} from 'delegate-it';
+import * as pageDetect from 'github-url-detection';
+import {$optional, closestElementOptional} from 'select-dom';
 
 import features from '../feature-manager.js';
 
-const activeElementsSelector = 'a, button, clipboard-copy, details';
+export function wasInteractiveElementClicked(event: DelegateEvent<MouseEvent>): boolean {
+	return Boolean(
+		closestElementOptional(
+			['a', 'button', 'clipboard-copy', 'details'],
+			event.target as HTMLElement,
+		),
+	);
+}
 
 function toggleCommitMessage(event: DelegateEvent<MouseEvent>): void {
-	// The clicked element is a button, a link or a popup ("Verified" badge, CI details, etc.)
-	const elementClicked = event.target as HTMLElement;
-	if (elementClicked.closest(activeElementsSelector)) {
+	if (wasInteractiveElementClicked(event)) {
 		return;
 	}
 
 	// There is text selection
-	if (globalThis.getSelection()?.toString().length !== 0) {
+	if (getSelection()?.toString().length !== 0) {
 		return;
 	}
 
+	// We might reach this point even if there's no toggle button, so use $optional
 	$optional([
 		'[data-testid="commit-row-show-description-button"]', // Commit list
 		'[data-testid="latest-commit-details-toggle"]', // File/folder
+		'.ellipsis-expander', // Compare
 	], event.delegateTarget)?.dispatchEvent(
 		new MouseEvent('click', {bubbles: true, altKey: event.altKey}),
 	);
@@ -29,6 +36,7 @@ function toggleCommitMessage(event: DelegateEvent<MouseEvent>): void {
 const commitMessagesSelector = [
 	'[data-testid="commit-row-item"]',
 	'[data-testid="latest-commit"]', // Commit message in file tree header
+	'.js-commits-list-item', // Compare
 ];
 
 function init(signal: AbortSignal): void {
@@ -43,7 +51,7 @@ void features.add(import.meta.url, {
 		pageDetect.isSingleFile,
 	],
 	exclude: [
-		pageDetect.isRepoFile404,
+		pageDetect.is404,
 	],
 	init,
 });
@@ -55,6 +63,7 @@ Test URLs:
 - Repo root: https://github.com/refined-github/sandbox/tree/254a81ef488dcb3866cf8a4cacde501d9faaa588
 - Commit list: https://github.com/refined-github/refined-github/commits/main/?after=384131b0be3d4097f7cc633f76aecd43f1292471+69
 - File/folder: https://github.com/refined-github/sandbox/tree/254a81ef488dcb3866cf8a4cacde501d9faaa588/.github/workflows
+- Compare: https://github.com/refined-github/sandbox/compare/default-a...Dont-mess
 
 How to test:
 

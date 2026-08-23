@@ -1,17 +1,15 @@
-import {elementExists} from 'select-dom';
 import * as pageDetect from 'github-url-detection';
+import {elementExists} from 'select-dom';
 
 import features from '../feature-manager.js';
-import getDefaultBranch from '../github-helpers/get-default-branch.js';
-import {buildRepoURL} from '../github-helpers/index.js';
 import getCurrentGitRef from '../github-helpers/get-current-git-ref.js';
+import getDefaultBranch from '../github-helpers/get-default-branch.js';
 import {registerHotkey} from '../github-helpers/hotkey.js';
-import {expectToken} from '../github-helpers/github-token.js';
+import {buildRepoUrl} from '../github-helpers/index.js';
 
 async function init(signal: AbortSignal): Promise<void> {
-	await expectToken();
 	const ref = getCurrentGitRef() ?? await getDefaultBranch();
-	const url = buildRepoURL('tree', ref) + '?search=1';
+	const url = buildRepoUrl('tree', ref) + '?search=1';
 	registerHotkey('t', url, {signal});
 }
 
@@ -20,11 +18,13 @@ void features.add(import.meta.url, {
 		pageDetect.isRepo,
 	],
 	exclude: [
-		() => elementExists('[data-hotkey="t"]'),
-		pageDetect.isEmptyRepo,
+		// TODO [2026-10-01]: Drop first two selectors
+		() => elementExists(['[data-hotkey="t"]', '[data-hotkey="t,Shift+T"]', '[aria-label="Go to file"]']),
 		pageDetect.isPRFiles,
 		pageDetect.isFileFinder,
 	],
+	awaitDomReady: true, // DOM-based filters
+	requiresToken: true,
 	init,
 });
 

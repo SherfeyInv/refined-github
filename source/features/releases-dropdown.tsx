@@ -1,16 +1,15 @@
+import delegate, {type DelegateEvent} from 'delegate-it';
 import React from 'dom-chef';
 import * as pageDetect from 'github-url-detection';
-import delegate, {type DelegateEvent} from 'delegate-it';
 import {CachedFunction} from 'webext-storage-cache';
 
-import api from '../github-helpers/api.js';
 import features from '../feature-manager.js';
-import {buildRepoURL, cacheByRepo} from '../github-helpers/index.js';
+import api from '../github-helpers/api.js';
+import {buildRepoUrl, cacheByRepo} from '../github-helpers/index.js';
 import observe from '../helpers/selector-observer.js';
 import GetReleases from './releases-dropdown.gql';
-import {expectToken} from '../github-helpers/github-token.js';
 
-const getReleases = new CachedFunction('releases', {
+const releasesCache = new CachedFunction('releases', {
 	async updater(): Promise<string[]> {
 		const {repository} = await api.v4(GetReleases);
 		return repository.releases.nodes.map(({tagName}: {tagName: string}) => tagName);
@@ -24,22 +23,34 @@ const getReleases = new CachedFunction('releases', {
 async function selectionHandler(event: DelegateEvent<Event, HTMLInputElement>): Promise<void> {
 	const field = event.delegateTarget;
 	const selectedTag = field.value;
-	const releases = await getReleases.get(); // Expected to be in cache
+	if (selectedTag === 'prerelease:false') {
+		location.assign('?q=prerelease%3Afalse');
+		return;
+	}
+
+	const releases = await releasesCache.get(); // Expected to be in cache
 	if (!('inputType' in event) && releases.includes(selectedTag)) {
-		location.href = buildRepoURL('releases/tag', encodeURIComponent(selectedTag));
+		location.assign(buildRepoUrl('releases/tag', encodeURIComponent(selectedTag)));
 		field.value = ''; // Can't call `preventDefault`, the `input` event is not cancelable
 	}
 }
 
 async function addList(searchField: HTMLInputElement): Promise<void> {
-	const releases = await getReleases.get();
+	const releases = await releasesCache.get();
 	if (releases.length === 0) {
 		return;
 	}
 
+	// `q` is only present in searches
+	const hidePreReleases = new URLSearchParams(location.search).get('q')?.includes('prerelease:false');
+
 	searchField.setAttribute('list', 'rgh-releases-dropdown');
 	searchField.after(
 		<datalist id="rgh-releases-dropdown">
+			<option
+				value="prerelease:false"
+				selected={hidePreReleases}
+			/>
 			{releases.map(tag => <option value={tag} />)}
 		</datalist>,
 	);
@@ -47,7 +58,6 @@ async function addList(searchField: HTMLInputElement): Promise<void> {
 
 const searchFieldSelector = 'input#release-filter';
 async function init(signal: AbortSignal): Promise<void> {
-	await expectToken();
 	observe(searchFieldSelector, addList, {signal});
 	delegate(searchFieldSelector, 'input', selectionHandler, {signal});
 }
@@ -56,6 +66,7 @@ void features.add(import.meta.url, {
 	include: [
 		pageDetect.isReleases,
 	],
+	requiresToken: true,
 	init,
 });
 
@@ -63,7 +74,6 @@ void features.add(import.meta.url, {
 
 ## Test URLs
 
-https://github.com/refined-github/refined-github/tags
 https://github.com/refined-github/sandbox/releases
 
 */

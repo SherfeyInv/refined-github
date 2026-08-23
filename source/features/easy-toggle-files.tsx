@@ -1,19 +1,19 @@
-import {$} from 'select-dom/strict.js';
 import delegate, {type DelegateEvent} from 'delegate-it';
 import * as pageDetect from 'github-url-detection';
+import {$} from 'select-dom';
 
-import {codeSearchHeader} from '../github-helpers/selectors.js';
 import features from '../feature-manager.js';
+import {codeSearchHeader} from '../github-helpers/selectors.js';
+import {wasInteractiveElementClicked} from './easy-toggle-commit-messages.js';
 
 function toggleFile(event: DelegateEvent<MouseEvent>): void {
-	const elementClicked = event.target as HTMLElement;
-	const headerBar = event.delegateTarget;
-
-	// The clicked element is either the bar itself or one of its 2 children
-	if (elementClicked === headerBar || elementClicked.parentElement === headerBar) {
-		$('[aria-label="Toggle diff contents"]', headerBar)
-			.dispatchEvent(new MouseEvent('click', {bubbles: true, altKey: event.altKey}));
+	if (wasInteractiveElementClicked(event)) {
+		return;
 	}
+
+	const headerBar = event.delegateTarget;
+	$('button:has(> .octicon-chevron-down, > .octicon-chevron-right)', headerBar)
+		.dispatchEvent(new MouseEvent('click', {bubbles: true, altKey: event.altKey}));
 }
 
 function toggleCodeSearchFile(event: DelegateEvent<MouseEvent>): void {
@@ -22,13 +22,22 @@ function toggleCodeSearchFile(event: DelegateEvent<MouseEvent>): void {
 	const toggle = $(':scope > button', headerBar);
 
 	// The clicked element is either the bar itself or one of its children excluding the button
-	if (elementClicked === headerBar || (elementClicked.parentElement === headerBar && elementClicked !== toggle)) {
+	if (elementClicked === headerBar || (elementClicked !== toggle && elementClicked.parentElement === headerBar)) {
 		toggle.dispatchEvent(new MouseEvent('click', {bubbles: true, altKey: event.altKey}));
 	}
 }
 
 function init(signal: AbortSignal): void {
-	delegate('.file-header', 'click', toggleFile, {signal});
+	delegate(
+		[
+			'.file-header',
+			// React
+			'[class^="Diff-module__diffHeaderWrapper"]',
+		],
+		'click',
+		toggleFile,
+		{signal},
+	);
 }
 
 function initSearchPage(signal: AbortSignal): void {

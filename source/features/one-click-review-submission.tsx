@@ -1,16 +1,22 @@
-import React from 'dom-chef';
+// Note: This feature only works on the legacy PR Files view.
+// We will drop the feature once that view has been gone for 6 months.
+// https://github.com/refined-github/refined-github/issues/8711
+// https://github.com/refined-github/refined-github/issues/9447
+import cx from 'clsx';
 import delegate, {type DelegateEvent} from 'delegate-it';
+import React from 'dom-chef';
 import * as pageDetect from 'github-url-detection';
 import CheckIcon from 'octicons-plain-react/Check';
 import FileDiffIcon from 'octicons-plain-react/FileDiff';
+import {$, $optional, closestElement, closestElementOptional} from 'select-dom';
 
 import features from '../feature-manager.js';
-import observe from '../helpers/selector-observer.js';
 import {assertNodeContent} from '../helpers/dom-utils.js';
+import observe from '../helpers/selector-observer.js';
 
 function replaceCheckboxes(originalSubmitButton: HTMLButtonElement): void {
 	const form = originalSubmitButton.form!;
-	const actionsRow = originalSubmitButton.closest('.Overlay-footer');
+	const actionsRow = closestElementOptional('.Overlay-footer', originalSubmitButton);
 	const formAttribute = originalSubmitButton.getAttribute('form')!;
 
 	// Do not use `$$` because elements can be outside `form`
@@ -18,7 +24,6 @@ function replaceCheckboxes(originalSubmitButton: HTMLButtonElement): void {
 	const radios = [...form.elements.namedItem('pull_request_review[event]') as RadioNodeList] as HTMLInputElement[];
 	if (radios.length === 0) {
 		throw new Error('Could not find radio buttons');
-		return;
 	}
 
 	// Set the default action for cmd+enter to Comment
@@ -40,15 +45,13 @@ function replaceCheckboxes(originalSubmitButton: HTMLButtonElement): void {
 	// Generate the new buttons
 	for (const radio of radios) {
 		const parent = radio.parentElement!;
-		const labelElement = (
-			parent.querySelector('label')
-			?? radio.nextSibling! // TODO: Remove after April 2025
-		);
-		const tooltip = parent.querySelector([
-			'p', // TODO: Remove after April 2025
+		const labelElement = $optional('label', parent)
+			?? radio.nextSibling!;
+		const tooltip = $([
+			'p',
 			'.FormControl-caption',
-		])!.textContent.trim().replace(/\.$/, '');
-		assertNodeContent(labelElement, /^(Approve|Request changes|Comment)$/);
+		], parent).textContent.trim().replace(/\.$/, '');
+		assertNodeContent(labelElement, /^(?:Approve|Request changes|Comment)$/);
 
 		const classes = ['btn btn-sm'];
 
@@ -63,7 +66,7 @@ function replaceCheckboxes(originalSubmitButton: HTMLButtonElement): void {
 				// Old version of GH don't nest the submit button inside the form, so must be linked manually. Issue #6963.
 				form={formAttribute}
 				value={radio.value}
-				className={classes.join(' ')}
+				className={cx(classes)}
 				aria-label={tooltip}
 				disabled={radio.disabled}
 			>
@@ -80,21 +83,19 @@ function replaceCheckboxes(originalSubmitButton: HTMLButtonElement): void {
 		if (actionsRow) {
 			actionsRow.prepend(button);
 		} else {
-			// TODO: For GHE. Remove after June 2025
-			const legacyActionsRow = originalSubmitButton.closest('.form-actions')!;
-			legacyActionsRow.append(button);
+			closestElement('.form-actions', originalSubmitButton).append(button);
 		}
 	}
 
 	// Remove original fields at last to avoid leaving a broken form
-	const fieldset = radios[0].closest('fieldset');
+	const fieldset = closestElementOptional('fieldset', radios[0]);
 
 	if (fieldset) {
 		fieldset.remove();
 	} else {
 		// To retain backwards compatibility with older GHE versions, remove any radios not within a fieldset. Issue #6963.
 		for (const radio of radios) {
-			radio.closest('.form-checkbox')!.remove();
+			closestElement('.form-checkbox', radio).remove();
 		}
 	}
 

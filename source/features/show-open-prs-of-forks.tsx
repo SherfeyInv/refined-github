@@ -1,24 +1,21 @@
 import React from 'dom-chef';
-import {CachedFunction} from 'webext-storage-cache';
-import {$} from 'select-dom/strict.js';
 import elementReady from 'element-ready';
 import * as pageDetect from 'github-url-detection';
+import {$} from 'select-dom';
+import {CachedFunction} from 'webext-storage-cache';
 
 import features from '../feature-manager.js';
 import api from '../github-helpers/api.js';
+import {getForkedRepo, getLoggedInUser, getRepo} from '../github-helpers/index.js';
 import pluralize from '../helpers/pluralize.js';
-import {getForkedRepo, getUsername, getRepo} from '../github-helpers/index.js';
+import observe from '../helpers/selector-observer.js';
 import GetPRs from './show-open-prs-of-forks.gql';
 
-function getLinkCopy(count: number): string {
-	return pluralize(count, 'one open pull request', 'at least $$ open pull requests');
-}
-
-const countPRs = new CachedFunction('prs-on-forked-repo', {
+const countPrs = new CachedFunction('prs-on-forked-repo', {
 	async updater(forkedRepo: string): Promise<{count: number; firstPr?: number}> {
 		const {search} = await api.v4(GetPRs, {
 			variables: {
-				query: `is:pr is:open archived:false repo:${forkedRepo} author:${getUsername()!}`,
+				query: `is:pr state:open archived:false repo:${forkedRepo} author:${getLoggedInUser()!}`,
 			},
 		});
 
@@ -37,47 +34,50 @@ const countPRs = new CachedFunction('prs-on-forked-repo', {
 	cacheKey: ([forkedRepo]): string => `${forkedRepo}:${getRepo()!.nameWithOwner}`,
 });
 
-// eslint-disable-next-line ts/no-restricted-types
-async function getPRs(): Promise<[prCount: number, url: string] | []> {
+// eslint-disable-next-line @typescript-eslint/no-restricted-types
+async function getPrs(): Promise<[prCount: number, url: string] | []> {
 	// Wait for the tab bar to be loaded
 	// Maybe replace with https://github.com/refined-github/github-url-detection/issues/85
 	await elementReady('.UnderlineNav-body');
-	if (!pageDetect.canUserEditRepo()) {
+	if (!pageDetect.canUserAccessRepoSettings()) {
 		return [];
 	}
 
 	const forkedRepo = getForkedRepo()!;
-	const {count, firstPr} = await countPRs.get(forkedRepo);
+	const {count, firstPr} = await countPrs.get(forkedRepo);
 	if (count === 1) {
 		return [count, `/${forkedRepo}/pull/${firstPr!}`];
 	}
 
 	const url = new URL(`/${forkedRepo}/pulls`, location.origin);
-	url.searchParams.set('q', 'is:pr is:open sort:updated-desc author:@me');
+	url.searchParams.set('q', 'is:pr state:open author:@me');
 	return [count, url.href];
 }
 
-async function initHeadHint(): Promise<void | false> {
-	const [count, url] = await getPRs();
+async function initHeadHint(signal: AbortSignal): Promise<void | false> {
+	const [count, url] = await getPrs();
 	if (!count) {
 		return false;
 	}
 
-	$(`[data-hovercard-type="repository"][href="/${getForkedRepo()!}"]`).after(
-		// The class is used by `quick-fork-deletion`
-		<> with <a href={url} className="rgh-open-prs-of-forks">{getLinkCopy(count)}</a></>,
-	);
+	// Use the observer because GitHub randomly updates the header and removes the hint after load
+	observe(`[data-hovercard-type="repository"][href="/${getForkedRepo()!}"]`, (repoHeader): void => {
+		repoHeader.after(
+			' with ',
+			<a href={url}>{pluralize(count, 'one open pull request', '$$+ open pull requests')}</a>,
+		);
+	}, {signal});
 }
 
 async function initDeleteHint(): Promise<void | false> {
-	const [count, url] = await getPRs();
+	const [count, url] = await getPrs();
 	if (!count) {
 		return false;
 	}
 
-	$('details-dialog[aria-label*="Delete"] .Box-body p:first-child').after(
+	$('#repo-delete-proceed-button-container').before(
 		<p className="flash flash-warn">
-			It will also abandon <a href={url}>your {getLinkCopy(count)}</a> in <strong>{getForkedRepo()!}</strong> and you’ll no longer be able to edit {count === 1 ? 'it' : 'them'}.
+			It will also close your <a href={url}>{pluralize(count, 'open pull request', '$$+ open pull requests')}</a> in <strong>{getForkedRepo()!}</strong>.
 		</p>,
 	);
 }
@@ -86,7 +86,7 @@ void features.add(import.meta.url, {
 	asLongAs: [
 		pageDetect.isForkedRepo,
 	],
-	deduplicate: 'has-rgh',
+	requiresToken: true,
 	init: initHeadHint,
 }, {
 	asLongAs: [
@@ -95,7 +95,7 @@ void features.add(import.meta.url, {
 	include: [
 		pageDetect.isRepoMainSettings,
 	],
-	deduplicate: 'has-rgh',
+	requiresToken: true,
 	init: initDeleteHint,
 });
 

@@ -1,26 +1,27 @@
+import delegate, {type DelegateEvent} from 'delegate-it';
 import React from 'dom-chef';
 import elementReady from 'element-ready';
-import {$, $optional} from 'select-dom/strict.js';
 import * as pageDetect from 'github-url-detection';
-import {setFieldText} from 'text-field-edit';
 import TrashIcon from 'octicons-plain-react/Trash';
-import delegate, {type DelegateEvent} from 'delegate-it';
+import {$, $optional} from 'select-dom';
+import {setFieldText} from 'text-field-edit';
 
 import features from '../feature-manager.js';
-import {buildRepoURL, getForkedRepo, getRepo} from '../github-helpers/index.js';
-import observe from '../helpers/selector-observer.js';
+import api from '../github-helpers/api.js';
 import {userIsAdmin} from '../github-helpers/get-user-permission.js';
 import {expectTokenScope} from '../github-helpers/github-token.js';
-import addNotice from '../github-widgets/notice-bar.js';
-import api from '../github-helpers/api.js';
+import {buildRepoUrl, getForkedRepo, getRepo} from '../github-helpers/index.js';
 import showToast from '../github-helpers/toast.js';
+import addNotice from '../github-helpers/notice-bar.js';
+import observe from '../helpers/selector-observer.js';
+import addTooltip, {withTooltipRef} from '../components/tooltip.js';
 
-const tooltip = 'Instant deletion: shift-alt-click';
+const tooltip = {label: 'Instant deletion via', shortcut: 'alt click'} as const;
 const buttonHashSelector = '#dialog-show-repo-delete-menu-dialog';
 
 // Only if the repository hasn't been starred
 async function isRepoUnpopular(): Promise<boolean> {
-	const counter = await elementReady('.starring-container .Counter');
+	const counter = await elementReady('[data-testid="star-button"] [data-component="CounterLabel"]');
 	return counter!.textContent === '0';
 }
 
@@ -29,23 +30,24 @@ async function deleteRepository(): Promise<void> {
 	await expectTokenScope('delete_repo');
 	await api.v3('/repos/' + nameWithOwner, {
 		method: 'DELETE',
-		json: false,
+		responseFormat: 'text',
 	});
 }
 
-async function modifyUIAfterSuccessfulDeletion(): Promise<void> {
+async function modifyUiAfterSuccessfulDeletion(): Promise<void> {
 	const {nameWithOwner, owner} = getRepo()!;
 	const forkSource = '/' + getForkedRepo()!;
-	const restoreURL = pageDetect.isOrganizationRepo()
+	const restoreUrl = pageDetect.isOrganizationRepo()
 		? `/organizations/${owner}/settings/deleted_repositories`
 		: '/settings/deleted_repositories';
-	const otherForksURL = `/${owner}?tab=repositories&type=fork`;
+	const otherForksUrl = `/${owner}?tab=repositories&type=fork`;
 
 	await addNotice(
 		<>
 			<TrashIcon />
 			<span>
-				Repository <strong>{nameWithOwner}</strong> deleted. <a href={restoreURL}>Restore it</a>, <a href={forkSource}>visit the source repo</a>, or see <a href={otherForksURL}>your other forks.</a>
+				Repository <strong>{nameWithOwner}</strong> deleted. <a href={restoreUrl}>Restore it</a>,{' '}
+				<a href={forkSource}>visit the source repo</a>, or see <a href={otherForksUrl}>your other forks.</a>
 			</span>
 		</>,
 		{action: false},
@@ -53,8 +55,8 @@ async function modifyUIAfterSuccessfulDeletion(): Promise<void> {
 	$('.application-main').remove();
 }
 
-async function handleShiftAltClick(event: DelegateEvent<MouseEvent, HTMLElement>): Promise<void> {
-	if (!event.shiftKey || !event.altKey) {
+async function handleAltClick(event: DelegateEvent<MouseEvent, HTMLElement>): Promise<void> {
+	if (!event.altKey) {
 		return;
 	}
 
@@ -64,29 +66,30 @@ async function handleShiftAltClick(event: DelegateEvent<MouseEvent, HTMLElement>
 	// https://github.com/refined-github/refined-github/pull/7866#issuecomment-2396270060
 	$optional<HTMLDialogElement>('#' + event.delegateTarget.getAttribute('data-show-dialog-id')!)?.close();
 
-	if (confirm('Are you sure you want to delete this repository?')) {
+	const {nameWithOwner} = getRepo()!;
+	if (confirm(`⚠️${nameWithOwner}⚠️ will be deleted. Are you sure?`)) {
 		await showToast(deleteRepository, {
 			message: 'Deleting repo…',
 			doneMessage: 'Repo deleted',
 		});
 
-		modifyUIAfterSuccessfulDeletion();
+		await modifyUiAfterSuccessfulDeletion();
 	}
 }
 
 function addShortcutTooltip(button: HTMLElement): void {
-	button.setAttribute('title', tooltip);
+	addTooltip(tooltip, button);
 }
 
 function addButton(header: HTMLElement): void {
 	header.prepend(
 		<li>
 			<a
-				href={buildRepoURL('settings', buttonHashSelector)}
+				href={buildRepoUrl('settings', buttonHashSelector)}
 				className="btn btn-sm btn-danger rgh-quick-repo-deletion"
-				title={tooltip}
+				ref={withTooltipRef(tooltip)}
 			>
-				<TrashIcon className="mr-2" />
+				<TrashIcon className="mr-2 tmp-mr-2" />
 				Delete fork
 			</a>
 		</li>,
@@ -103,12 +106,12 @@ function autoOpenModal(signal: AbortSignal): void {
 }
 
 async function initRepoRoot(signal: AbortSignal): Promise<void | false> {
-	observe('.pagehead-actions', addButton, {signal});
-	delegate('.rgh-quick-repo-deletion', 'click', handleShiftAltClick, {signal});
+	observe('[data-testid="repo-header-actions"]', addButton, {signal});
+	delegate('.rgh-quick-repo-deletion', 'click', handleAltClick, {signal});
 }
 
 async function initRepoSettings(signal: AbortSignal): Promise<void | false> {
-	delegate(buttonHashSelector, 'click', handleShiftAltClick, {signal});
+	delegate(buttonHashSelector, 'click', handleAltClick, {signal});
 	observe(buttonHashSelector, addShortcutTooltip, {signal});
 }
 

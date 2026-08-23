@@ -1,37 +1,30 @@
 import React from 'dom-chef';
-import {CachedFunction} from 'webext-storage-cache';
 import * as pageDetect from 'github-url-detection';
 import PlusIcon from 'octicons-plain-react/Plus';
 import TagIcon from 'octicons-plain-react/Tag';
-import {elementExists} from 'select-dom';
-import {$optional} from 'select-dom/strict.js';
+import {$optional, elementExists} from 'select-dom';
+import {CachedFunction} from 'webext-storage-cache';
 
 import features from '../feature-manager.js';
-import observe from '../helpers/selector-observer.js';
 import api from '../github-helpers/api.js';
-import {
-	buildRepoURL,
-	cacheByRepo,
-	getLatestVersionTag,
-	getRepo,
-} from '../github-helpers/index.js';
-import isDefaultBranch from '../github-helpers/is-default-branch.js';
-import pluralize from '../helpers/pluralize.js';
-import {branchSelector} from '../github-helpers/selectors.js';
-import getPublishRepoState from './unreleased-commits.gql';
 import getDefaultBranch from '../github-helpers/get-default-branch.js';
+import {userHasPushAccess} from '../github-helpers/get-user-permission.js';
+import {groupButtons} from '../github-helpers/group-buttons.js';
+import {buildRepoUrl, cacheByRepo, getLatestVersionTag, getRepo} from '../github-helpers/index.js';
+import isDefaultBranch from '../github-helpers/is-default-branch.js';
+import {branchSelector} from '../github-helpers/selectors.js';
 import abbreviateString from '../helpers/abbreviate-string.js';
 import {wrapAll} from '../helpers/dom-utils.js';
-import {groupButtons} from '../github-helpers/group-buttons.js';
-import {expectToken} from '../github-helpers/github-token.js';
-import {userHasPushAccess} from '../github-helpers/get-user-permission.js';
+import pluralize from '../helpers/pluralize.js';
+import observe from '../helpers/selector-observer.js';
+import getPublishRepoState from './unreleased-commits.gql';
 
 type RepoPublishState = {
 	latestTag: string | false;
 	aheadBy: number;
 };
 
-type Tags = {
+type Tag = {
 	name: string;
 	tag: {
 		oid: string;
@@ -55,7 +48,8 @@ const repoPublishState = new CachedFunction('tag-ahead-by', {
 		}
 
 		const tags = new Map<string, string>();
-		for (const node of repository.refs.nodes as Tags[]) {
+		for (const node of repository.refs.nodes as Tag[]) {
+			// The commit might be missing on "lightweight" tags, so the code defaults to the tag.oid instead
 			tags.set(node.name, node.tag.commit?.oid ?? node.tag.oid);
 		}
 
@@ -63,7 +57,9 @@ const repoPublishState = new CachedFunction('tag-ahead-by', {
 		// https://github.com/refined-github/refined-github/issues/6094
 		const latestTag = getLatestVersionTag([...tags.keys()]);
 		const latestTagOid = tags.get(latestTag)!;
-		const aheadBy = repository.defaultBranchRef.target.history.nodes.findIndex((node: AnyObject) => node.oid === latestTagOid);
+		const aheadBy = repository.defaultBranchRef.target.history.nodes.findIndex((node: AnyObject) =>
+			node.oid === latestTagOid,
+		);
 
 		return {
 			latestTag,
@@ -79,20 +75,20 @@ async function createLink(
 	latestTag: string,
 	aheadBy: number,
 ): Promise<HTMLElement> {
-	const commitCount
-		= aheadBy === undeterminableAheadBy
-			? 'More than 20 unreleased commits'
-			: pluralize(aheadBy, '$$ unreleased commit');
+	const commitCount = aheadBy === undeterminableAheadBy
+		? 'More than 20 unreleased commits'
+		: pluralize(aheadBy, '$$ unreleased commit');
 	const label = `${commitCount}\nsince ${abbreviateString(latestTag, 30)}`;
 
 	return (
 		<a
-			className="btn px-2 tooltipped tooltipped-se"
-			href={buildRepoURL('compare', `${latestTag}...${await getDefaultBranch()}`)}
+			className="btn px-2 tmp-px-2 tooltipped tooltipped-se"
+			href={buildRepoUrl('compare', `${latestTag}...${await getDefaultBranch()}`)}
 			aria-label={label}
 		>
-			<TagIcon className="v-align-middle" />
-			{aheadBy === undeterminableAheadBy || <sup className="ml-n2"> +{aheadBy}</sup>}
+			<TagIcon />
+			{' '}
+			{aheadBy === undeterminableAheadBy || <sup className="ml-n2 tmp-ml-n2">+{aheadBy}</sup>}
 		</a>
 	);
 }
@@ -107,17 +103,17 @@ async function createLinkGroup(latestTag: string, aheadBy: number): Promise<HTML
 		link,
 		// `aria-label` wording taken from $user/$repo/releases page
 		<a
-			href={buildRepoURL('releases/new')}
-			className="btn px-2 tooltipped tooltipped-se"
+			href={buildRepoUrl('releases/new')}
+			className="btn px-2 tmp-px-2 tooltipped tooltipped-se"
 			aria-label="Draft a new release"
 			data-turbo-frame="repo-content-turbo-frame"
 		>
-			<PlusIcon className="v-align-middle" />
+			<PlusIcon />
 		</a>,
 	]);
 }
 
-async function addToHome(branchSelector: HTMLButtonElement): Promise<void> {
+async function addToHome(branchSelectorElement: HTMLButtonElement): Promise<void> {
 	// React issues. Duplicates appear after a color scheme update
 	// https://github.com/refined-github/refined-github/issues/7536
 	if (elementExists('.rgh-unreleased-commits-wrapper')) {
@@ -136,7 +132,7 @@ async function addToHome(branchSelector: HTMLButtonElement): Promise<void> {
 
 	wrapAll(
 		<div className="d-flex gap-2 rgh-unreleased-commits-wrapper" />,
-		branchSelector,
+		branchSelectorElement,
 		linkGroup,
 	);
 }
@@ -169,14 +165,38 @@ async function addToReleases(releasesFilter: HTMLInputElement): Promise<void> {
 	widget.classList.add('mr-md-0', 'mr-2');
 }
 
-async function initHome(signal: AbortSignal): Promise<void> {
-	await expectToken();
+async function addToNewRelease(header: HTMLElement): Promise<void> {
+	const {latestTag, aheadBy} = await repoPublishState.get();
+	const isAhead = aheadBy > 0;
+
+	if (!latestTag || !isAhead) {
+		return;
+	}
+
+	const defaultBranch = await getDefaultBranch();
+
+	header.append(
+		' ',
+		<a target="_blank" href={buildRepoUrl('compare', `${latestTag}...${defaultBranch}`)}>
+			{pluralize(aheadBy, '$$ unreleased commit')}
+		</a>,
+		` on ${defaultBranch} since `,
+		<a target="_blank" href={buildRepoUrl('releases', latestTag)}>
+			{abbreviateString(latestTag, 30)}
+		</a>,
+	);
+}
+
+function initHome(signal: AbortSignal): void {
 	observe(branchSelector, addToHome, {signal});
 }
 
-async function initReleases(signal: AbortSignal): Promise<void> {
-	await expectToken();
+function initReleases(signal: AbortSignal): void {
 	observe('input#release-filter', addToReleases, {signal});
+}
+
+function initNewRelease(signal: AbortSignal): void {
+	observe('.js-tag-status-message[data-state="empty"]', addToNewRelease, {signal});
 }
 
 void features.add(import.meta.url, {
@@ -186,13 +206,22 @@ void features.add(import.meta.url, {
 	include: [
 		pageDetect.isRepoHome,
 	],
+	requiresToken: true,
 	init: initHome,
 }, {
 	include: [
 		// Only first page of Releases
 		() => getRepo()?.path === 'releases',
 	],
+	requiresToken: true,
 	init: initReleases,
+}, {
+	include: [
+		// Detections run on all pages, even not repos
+		() => getRepo()?.path === 'releases/new',
+	],
+	requiresToken: true,
+	init: initNewRelease,
 });
 
 /*
@@ -216,5 +245,8 @@ https://github.com/refined-github/refined-github/releases
 
 Releases page with changelog file
 https://github.com/fczbkk/css-selector-generator/releases
+
+Realeasing a new version
+https://github.com/refined-github/refined-github/releases/new
 
 */

@@ -1,39 +1,45 @@
 import React from 'dom-chef';
-import {$} from 'select-dom/strict.js';
-import SearchIcon from 'octicons-plain-react/Search';
 import * as pageDetect from 'github-url-detection';
+import SearchIcon from 'octicons-plain-react/Search';
+import {$, $$, closestElement} from 'select-dom';
 
 import features from '../feature-manager.js';
 import observe from '../helpers/selector-observer.js';
 
-function getActionURL(): URL {
-	const actionRepo = $('aside a:has(.octicon-repo)')
-		.pathname
-		.slice(1);
+function getActionUrl(repoLink: HTMLAnchorElement): URL {
+	const actionRepo = repoLink.pathname.slice(1);
 
-	const actionURL = new URL('search', location.origin);
-	actionURL.search = new URLSearchParams({
+	const actionUrl = new URL('search', location.origin);
+	actionUrl.search = new URLSearchParams({
 		q: `${actionRepo} path:.github/workflows/ language:YAML`,
 		type: 'Code',
 		s: 'indexed',
 		o: 'desc',
 	}).toString();
 
-	return actionURL;
+	return actionUrl;
 }
 
-function addUsageLink(side: HTMLElement): void {
-	const actionURL = getActionURL();
+function cleanElement(element: HTMLElement): void {
+	for (const child of $$(['[id]', '[aria-labelledby]'], element)) {
+		child.removeAttribute('id');
+		child.removeAttribute('aria-labelledby');
+	}
+}
 
-	side.after(
-		<a href={actionURL.href} className="d-block mb-2">
-			<SearchIcon width={14} className="color-fg-default mr-2" />Usage examples
-		</a>,
-	);
+function addUsageLink(repoItem: HTMLElement): void {
+	const usageItem = repoItem.cloneNode(true);
+	cleanElement(usageItem);
+	const usageLink = $('a', usageItem);
+	usageLink.href = getActionUrl(usageLink).href;
+	$('[data-component="ActionList.Item.Label"]', usageItem).textContent = 'Usage examples';
+	$('[data-component="ActionList.LeadingVisual"]', usageItem).replaceChildren(<SearchIcon />);
+
+	closestElement('ul', repoItem).append(usageItem);
 }
 
 function init(signal: AbortSignal): void {
-	observe('.d-block.mb-2[href^="/contact"]', addUsageLink, {signal});
+	observe('[data-testid="resources"] [data-component="ActionList.Item"]:has(.octicon-repo)', addUsageLink, {signal});
 }
 
 void features.add(import.meta.url, {

@@ -1,182 +1,98 @@
 import 'webext-base-css/webext-base.css';
 import './options.css';
-import {$, $optional} from 'select-dom/strict.js';
-import {$$} from 'select-dom';
-import fitTextarea from 'fit-textarea';
+
+// eslint-disable-next-line import-x/no-unassigned-import -- custom component
+import './options.svelte';
+
+// eslint-disable-next-line import-x/no-unassigned-import -- Side effects
+import 'webext-bugs/target-blank';
+
 import {enableTabToIndent} from 'indent-textarea';
-import delegate, {type DelegateEvent} from 'delegate-it';
-import {isChrome, isFirefox} from 'webext-detect';
-import type {SyncedForm} from 'webext-options-sync-per-domain';
+import {$, $$} from 'select-dom';
+import elementReady from 'element-ready';
+import {assertDefined} from 'ts-extras';
 
-import './helpers/target-blank-polyfill.js';
 import clearCacheHandler from './helpers/clear-cache-handler.js';
-import {styleHotfixes} from './helpers/hotfix.js';
-import {importedFeatures} from './feature-data.js';
 import {perDomainOptions} from './options-storage.js';
-import isDevelopmentVersion from './helpers/is-development-version.js';
-import {doesBrowserActionOpenOptions} from './helpers/feature-utils.js';
-import {state as bisectState} from './helpers/bisect.js';
-import initFeatureList, {updateListDom} from './options/feature-list.js';
-import initTokenValidation from './options/token-validation.js';
+import initToggleAllButtons from './options/toggle-all.js';
 
-const supportsFieldSizing = CSS.supports('field-sizing', 'content');
+function sortFeatures(): void {
+	const container = $('.js-features');
+	const features = $$('.feature-item').toSorted((a, b) => a.dataset.text!.localeCompare(b.dataset.text!));
+	const grouped = Object.groupBy(features, feature => {
+		const checkbox = $('input.feature-checkbox', feature);
+		return checkbox.checked ? 'on' : checkbox.disabled ? 'broken' : 'off';
+	});
 
-let syncedForm: SyncedForm | undefined;
-
-const {version} = chrome.runtime.getManifest();
-
-async function findFeatureHandler(this: HTMLButtonElement): Promise<void> {
-	// TODO: Add support for GHE
-	const options = await perDomainOptions.getOptionsForOrigin().getAll();
-	const enabledFeatures = importedFeatures.filter(featureId => options['feature:' + featureId]);
-	await bisectState.set(enabledFeatures);
-
-	this.disabled = true;
-	setTimeout(() => {
-		this.disabled = false;
-	}, 10_000);
-
-	$('#find-feature-message').hidden = false;
-}
-
-function focusFirstField({delegateTarget: section}: DelegateEvent<Event, HTMLDetailsElement>): void {
-	if (section.getBoundingClientRect().bottom > window.innerHeight) {
-		section.scrollIntoView({behavior: 'smooth', block: 'nearest'});
-	}
-
-	if (section.open) {
-		const field = $optional('input, textarea', section);
-		if (field) {
-			field.focus({preventScroll: true});
-			if (!supportsFieldSizing && field instanceof HTMLTextAreaElement) {
-				// #6404
-				fitTextarea(field);
+	for (const group of [grouped.off, grouped.broken, grouped.on]) {
+		if (group) {
+			for (const feature of group) {
+				container.append(feature);
 			}
 		}
 	}
 }
 
-function updateRateLink(): void {
-	if (isChrome()) {
-		return;
+function updateListDom(): void {
+	sortFeatures();
+
+	// Notify <feature-count> that the DOM state has updated
+	globalThis.dispatchEvent(new CustomEvent('rgh:update-count'));
+}
+
+function informComponentOfExternalUpdate(field: HTMLInputElement | HTMLTextAreaElement): void {
+	field.dispatchEvent(new InputEvent('input', {bubbles: true}));
+}
+
+assertDefined(
+	await elementReady('.js-features', {
+		stopOnDomReady: false,
+		signal: AbortSignal.timeout(1000),
+	}),
+);
+
+// Update list from saved options
+const syncedForm = await perDomainOptions.syncForm('form');
+
+// <token-input> runs before the value is set, so it detects `firstRun` to avoid validation on an empty form.
+// This triggers a proper run
+for (const tokenField of $$('input[name="personalToken"]')) {
+	informComponentOfExternalUpdate(tokenField);
+}
+
+// Decorate list
+updateListDom();
+initToggleAllButtons();
+
+// JS loaded, remove message before it appears
+$('#js-failed').remove();
+
+// Update domain-dependent page content when the domain is changed
+syncedForm.onChange(async domain => {
+	const host = domain === 'default' ? 'github.com' : domain;
+
+	// Point the link to the right domain
+	$('a#personal-token-link').host = host;
+
+	$('rgh-options').domain = domain;
+
+	for (const input of $$('input[name="personalToken"]')) {
+		informComponentOfExternalUpdate(input);
 	}
 
-	$('a#rate-link').href = isFirefox() ? 'https://addons.mozilla.org/en-US/firefox/addon/refined-github-' : 'https://apps.apple.com/app/id1519867270?action=write-review';
-}
-
-function isEnterprise(): boolean {
-	return syncedForm!.getSelectedDomain() !== 'default';
-}
-
-async function showStoredCssHotfixes(): Promise<void> {
-	const cachedCSS = await styleHotfixes.getCached(version);
-	$('#hotfixes-field').textContent
-		= isDevelopmentVersion()
-			? 'Hotfixes are not applied in the development version.'
-			: isEnterprise()
-				? 'Hotfixes are not applied on GitHub Enterprise.'
-				: cachedCSS ?? 'No CSS found in cache.';
-}
-
-function enableToggleAll(this: HTMLButtonElement): void {
-	this.parentElement!.remove();
-	for (const ui of $$('.toggle-all-features')) {
-		ui.hidden = false;
-	}
-}
-
-function disableAllFeatures(): void {
-	for (const enabledFeature of $$('.feature-checkbox:checked')) {
-		enabledFeature.click();
-	}
-
-	$('details#features').open = true;
-}
-
-function enableAllFeatures(): void {
-	for (const disabledFeature of $$('.feature-checkbox:not(:checked)')) {
-		disabledFeature.click();
-	}
-
-	$('details#features').open = true;
-}
-
-async function generateDom(): Promise<void> {
-	// Generate list
-	await initFeatureList();
-
-	// Update list from saved options
-	syncedForm = await perDomainOptions.syncForm('form');
-
-	// Decorate list
 	updateListDom();
+});
 
-	// Only now the form is ready, we can show it
-	$('#js-failed').remove();
+// Refresh page when permissions are changed (because the dropdown selector needs to be regenerated)
+chrome.permissions.onRemoved.addListener(() => {
+	location.reload();
+});
+chrome.permissions.onAdded.addListener(() => {
+	location.reload();
+});
 
-	// Enable token validation
-	void initTokenValidation(syncedForm);
+// Improve textareas editing
+enableTabToIndent('textarea');
 
-	// Update rate link if necessary
-	updateRateLink();
-
-	// Hide non-applicable "Button link" section
-	if (doesBrowserActionOpenOptions) {
-		$('#action').hidden = true;
-	}
-
-	// Show stored CSS hotfixes
-	void showStoredCssHotfixes();
-
-	$('#version').textContent = version;
-}
-
-function addEventListeners(): void {
-	// Update domain-dependent page content when the domain is changed
-	syncedForm?.onChange(async domain => {
-		// Point the link to the right domain
-		$('a#personal-token-link').host = domain === 'default' ? 'github.com' : domain;
-
-		for (const element of $$('storage-usage[item]')) {
-			element.setAttribute('item', domain === 'default' ? 'options' : 'options:' + domain);
-		}
-
-		// Delay to let options load first
-		setTimeout(updateListDom, 100);
-	});
-
-	// Refresh page when permissions are changed (because the dropdown selector needs to be regenerated)
-	chrome.permissions.onRemoved.addListener(() => {
-		location.reload();
-	});
-	chrome.permissions.onAdded.addListener(() => {
-		location.reload();
-	});
-
-	// Improve textareas editing
-	enableTabToIndent('textarea');
-	if (!supportsFieldSizing) {
-		fitTextarea.watch('textarea');
-	}
-
-	// Automatically focus field when a section is toggled open
-	delegate('details', 'toggle', focusFirstField, {capture: true});
-
-	// Add cache clearer
-	$('#clear-cache').addEventListener('click', clearCacheHandler);
-
-	// Add bisect tool
-	$('#find-feature').addEventListener('click', findFeatureHandler);
-
-	// Handle "Toggle all" buttons
-	$('#toggle-all-features').addEventListener('click', enableToggleAll);
-	$('#disable-all-features').addEventListener('click', disableAllFeatures);
-	$('#enable-all-features').addEventListener('click', enableAllFeatures);
-}
-
-async function init(): Promise<void> {
-	await generateDom();
-	addEventListeners();
-}
-
-void init();
+// Add cache clearer
+$('#clear-cache').addEventListener('click', clearCacheHandler);

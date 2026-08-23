@@ -1,47 +1,66 @@
 import React from 'dom-chef';
-import {$$} from 'select-dom';
 import * as pageDetect from 'github-url-detection';
+import {$, closestElement, countElements} from 'select-dom';
 
 import features from '../feature-manager.js';
-import {getBranches} from '../github-helpers/pr-branches.js';
 import getDefaultBranch from '../github-helpers/get-default-branch.js';
-import cleanCommitMessage from '../helpers/clean-commit-message.js';
 import {userHasPushAccess} from '../github-helpers/get-user-permission.js';
+import {getConversationAuthor} from '../github-helpers/index.js';
+import {getBranches} from '../github-helpers/pr-branches.js';
+import {confirmMergeButton} from '../github-helpers/selectors.js';
+import attachElement from '../helpers/attach-element.js';
+import cleanCommitMessage from '../helpers/clean-commit-message.js';
 import observe from '../helpers/selector-observer.js';
-import {expectToken} from '../github-helpers/github-token.js';
+import {setReactTextareaValue} from '../helpers/set-react-text-field-value.js';
 
 const isPrAgainstDefaultBranch = async (): Promise<boolean> => getBranches().base.branch === await getDefaultBranch();
 
-async function clear(messageField: HTMLTextAreaElement): Promise<void | false> {
-	// Only run once so that it doesn't clear the field every time it's opened
-	features.unload(import.meta.url);
-
-	const originalMessage = messageField.value;
-	const cleanedMessage = cleanCommitMessage(originalMessage, !await isPrAgainstDefaultBranch());
-
-	if (cleanedMessage === originalMessage.trim()) {
-		return false;
+async function clear(messageField: HTMLTextAreaElement): Promise<void> {
+	if (!/squash/i.test($(confirmMergeButton).textContent)) {
+		return;
 	}
 
+	const originalMessage = messageField.value;
+	const author = getConversationAuthor();
+	let cleanedMessage = cleanCommitMessage(originalMessage, !await isPrAgainstDefaultBranch(), [author]);
+
+	if (cleanedMessage === originalMessage.trim()) {
+		return;
+	}
+
+	cleanedMessage = cleanedMessage ? cleanedMessage + '\n' : '';
 	// Do not use `text-field-edit` #6348
-	messageField.value = cleanedMessage ? cleanedMessage + '\n' : '';
+	setReactTextareaValue(messageField, cleanedMessage);
 
-	// Trigger `fit-textareas` if enabled
-	messageField.dispatchEvent(new Event('input', {bubbles: true}));
+	let isUndoing = false;
+	function toggleUndoRedo({currentTarget}: React.MouseEvent<HTMLButtonElement>): void {
+		isUndoing = !isUndoing;
+		setReactTextareaValue(messageField, isUndoing ? originalMessage : cleanedMessage);
+		currentTarget.textContent = isUndoing ? 'Redo' : 'Undo';
+	}
 
-	messageField.after(
-		<div>
-			<p className="note">
-				The description field was cleared by <a target="_blank" href="https://github.com/refined-github/refined-github/wiki/Extended-feature-descriptions#clear-pr-merge-commit-message" rel="noreferrer">Refined GitHub</a>.
-			</p>
-			<hr />
-		</div>,
-	);
+	const anchor = closestElement('div[data-has-label]', messageField);
+	attachElement(anchor, {
+		after: () => (
+			<div className="flex-self-stretch">
+				<p className="note">
+					The description field was{' '}
+					<a
+						target="_blank"
+						href="https://github.com/refined-github/refined-github/wiki/Extended-feature-descriptions#clear-pr-merge-commit-message"
+						rel="noreferrer"
+					>
+						cleared
+					</a>{' '}
+					by Refined GitHub. <button type="button" className="btn-link" onClick={toggleUndoRedo}>Undo</button>
+				</p>
+			</div>
+		),
+	});
 }
 
 async function init(signal: AbortSignal): Promise<void> {
-	await expectToken();
-	observe('textarea#merge_message_field', clear, {signal});
+	observe('textarea[placeholder="Add an optional extended description…"]', clear, {signal});
 }
 
 void features.add(import.meta.url, {
@@ -51,9 +70,10 @@ void features.add(import.meta.url, {
 	],
 	exclude: [
 		// Don't clear 1-commit PRs #3140
-		() => $$('.TimelineItem.js-commit').length === 1,
+		() => countElements('.TimelineItem.js-commit') === 1,
 	],
 	awaitDomReady: true, // Appears near the end of the page anyway
+	requiresToken: true,
 	init,
 });
 

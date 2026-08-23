@@ -1,10 +1,11 @@
 /* You can have invisible/inactive links to the options page on the wiki. This feature enables them. */
+/* Use this HTML in a markdown document: <a name="options-page-link">options page</a> */
 import delegate from 'delegate-it';
 
 import features from '../feature-manager.js';
+import {isRefinedGitHubRepo} from '../github-helpers/index.js';
 import openOptions from '../helpers/open-options.js';
 import observe from '../helpers/selector-observer.js';
-import {isRefinedGitHubRepo} from '../github-helpers/index.js';
 
 const placeholdersSelector = 'a[name="user-content-options-page-link"]';
 

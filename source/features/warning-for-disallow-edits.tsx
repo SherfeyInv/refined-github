@@ -1,15 +1,16 @@
 import './warning-for-disallow-edits.css';
 
 import React from 'dom-chef';
-import {$optional} from 'select-dom/strict.js';
 import * as pageDetect from 'github-url-detection';
+import {$optional, closestElement} from 'select-dom';
 
 import features from '../feature-manager.js';
 import attachElement from '../helpers/attach-element.js';
 
 const getWarning = (): React.JSX.Element => (
-	<div className="flash flash-error mt-3 rgh-warning-for-disallow-edits">
-		<strong>Note:</strong> Maintainers may require changes. It&apos;s easier and faster to allow them to make direct changes before merging.
+	<div className="flash flex-auto flash-error my-3 tmp-my-3 rgh-warning-for-disallow-edits">
+		<strong>Note:</strong>{' '}
+		Maintainers may require changes. It&apos;s easier and faster to allow them to make direct changes before merging.
 	</div>
 );
 
@@ -19,16 +20,34 @@ function init(): void | false {
 		return false;
 	}
 
-	attachElement(
-		checkbox.closest('.discussion-sidebar-item')!,
-		{after: getWarning},
-	);
+	if (pageDetect.isPRConversation()) {
+		attachElement(
+			closestElement('.discussion-sidebar-item', checkbox),
+			{after: getWarning},
+		);
+	} else {
+		const option = closestElement('.js-collab-option', checkbox);
+
+		// Prevent layout shifting when warning appears
+		option.classList.remove('flex-auto');
+		const actionRow = option.parentElement!;
+		actionRow.classList.add('mt-1');
+		actionRow.parentElement!.classList.remove('flex-wrap');
+
+		attachElement(
+			actionRow.lastElementChild!,
+			{after: getWarning},
+		);
+	}
 }
 
 void features.add(import.meta.url, {
 	include: [
 		pageDetect.isCompare,
 		pageDetect.isPRConversation,
+	],
+	exclude: [
+		pageDetect.isMergedPR,
 	],
 	awaitDomReady: true,
 	init,

@@ -1,26 +1,24 @@
-/* eslint-disable no-var -- TypeScript weirdness */
+/* eslint-disable @typescript-eslint/naming-convention -- Declaration merging */
+/* eslint-disable @typescript-eslint/consistent-type-definitions -- Declaration merging */
 
-/// <reference types="@types/dom-navigation" />
-
-declare var content: {
-	fetch: GlobalFetch;
-} | undefined;
-
-// eslint-disable-next-line unicorn/prefer-global-this -- Types not available there
-declare var navigation: typeof window.navigation;
-
-type GlobalFetch = typeof fetch;
-type Arrayable<X> = X | X[];
-type AnyObject = Record<string, any>;
-type Deinit = {disconnect: VoidFunction} | {clear: VoidFunction} | {destroy: VoidFunction} | {abort: VoidFunction} | VoidFunction;
-
-type FeatureID = string & {feature: true};
-interface FeatureMeta {
-	id: FeatureID;
-	description: string;
-	screenshot: string | null; // eslint-disable-line ts/no-restricted-types -- We use `null` in the JSON file
-	css?: true;
+declare module '*.svelte';
+declare module '*.css';
+declare module '*.gql' {
+	export = string;
 }
+
+type AnyObject = Record<string, any>;
+type FeatureId = string & {feature: true};
+interface FeatureMeta {
+	id: FeatureId;
+	description: string;
+	screenshot: string | null; // eslint-disable-line @typescript-eslint/no-restricted-types -- We use `null` in the JSON file
+	css?: true;
+	cssOnly?: true;
+}
+
+type Not<Yes, No> = Yes extends No ? never : Yes;
+type UnslashedString<S extends string> = Not<S, `/${string}` | `${string}/`>;
 
 // These types are unnecessarily loose
 // https://dom.spec.whatwg.org/#dom-node-textcontent
@@ -34,37 +32,31 @@ interface Element {
 	textContent: string;
 }
 
-declare module 'size-plugin';
-
-declare module '*.gql' {
-	export = string;
-}
-
-// Custom UI events specific to RGH
+// Custom UI events specific to GitHub
 interface GlobalEventHandlersEventMap {
-	'details:toggled': CustomEvent;
 	'pjax:error': CustomEvent;
 	'page:loaded': CustomEvent;
 	'turbo:visit': CustomEvent;
-	'session:resume': CustomEvent;
-	// No input:InputEvent match
-	// https://github.com/microsoft/TypeScript-DOM-lib-generator/issues/1174#issuecomment-933042088
+}
+
+interface HTMLElementTagNameMap {
+	'rgh-options': HTMLElement & {domain: string};
 }
 
 declare namespace JSX {
 	interface IntrinsicElements {
-		'clipboard-copy': IntrinsicElements.button & {for?: string};
-		'details-dialog': IntrinsicElements.div & {tabindex: string};
-		'details-menu': IntrinsicElements.div & {src?: string; preload?: boolean};
-		'has-rgh': IntrinsicElements.div;
-		'has-rgh-inner': IntrinsicElements.div;
-		'include-fragment': IntrinsicElements.div & {src?: string};
-		'label': IntrinsicElements.label & {for?: string};
-		'relative-time': IntrinsicElements.div & {datetime: string};
-		'tab-container': IntrinsicElements.div;
-		'batch-deferred-content': IntrinsicElements.div;
-		'time-ago': IntrinsicElements.div & {datetime: string; format?: string};
 		'anchored-position': IntrinsicElements.div;
+		'batch-deferred-content': IntrinsicElements.div;
+		'details-menu': IntrinsicElements.div & {src?: string; preload?: boolean};
+		'feature-item': IntrinsicElements.HTMLElement & {id: string; 'data-text': string};
+		'has-rgh-inner': IntrinsicElements.div;
+		'has-rgh': IntrinsicElements.div;
+		'include-fragment': IntrinsicElements.div & {src?: string};
+		'relative-time': IntrinsicElements.div & {datetime: string};
+		'segmented-control': IntrinsicElements.HTMLElement;
+		'time-ago': IntrinsicElements.div & {datetime: string; format?: string};
+		'tool-tip': IntrinsicElements.HTMLElement & {for?: string};
+		label: IntrinsicElements.label & {for?: string};
 	}
 
 	type BaseElement = IntrinsicElements['div'];
@@ -75,11 +67,13 @@ declare namespace JSX {
 }
 
 // Drop after https://github.com/Microsoft/TypeScript/issues/30928
+// eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- Declaration merging
 interface NamedNodeMap {
 	[key: string]: Attr;
 }
 
 // Drop after https://github.com/Microsoft/TypeScript/issues/30928
+// eslint-disable-next-line @typescript-eslint/consistent-indexed-object-style -- Declaration merging
 interface HTMLFormControlsCollection {
 	[key: string]: HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement | HTMLSelectElement;
 }

@@ -1,9 +1,3 @@
-[rgh-sticky-sidebar-enabled] #js-repo-pjax-container ul.pagehead-actions,
-/* https://github.com/refined-github/refined-github/issues/6761 */
-[rgh-sticky-sidebar-enabled] [id^='my-forks-menu'] {
-	z-index: initial !important; /* This affects the social buttons. It seems to have no effect but it constantly causes trouble with other features. */
-}
-
 /*
 Have the calculations available even when the sidebar isn't sticky so that `--rgh-sticky-sidebar-offset` can be used via JS.
 
@@ -18,7 +12,9 @@ Exclusively use simple sums and use `0px` instead of `0`
 }
 
 /* `isRepoRoot` */
-.Layout-sidebar .BorderGrid {
+div[class^='prc-PageLayout-Pane']:has(
+	> rails-partial[data-partial-name='codeViewRepoRoute.Sidebar']
+) {
 	--rgh-sticky-sidebar-offset: 0;
 }
 
@@ -27,48 +23,12 @@ Exclusively use simple sums and use `0px` instead of `0`
 	--rgh-sticky-notification-header-height: 69px;
 }
 
-/* required to make `sticky` work for the issue Sidebar */
-.rgh-sticky-sidebar-container {
-	display: unset !important;
-}
-
 .rgh-sticky-sidebar {
 	position: sticky;
 	top: var(--rgh-sticky-sidebar-offset, 0) !important;
+}
 
-	/* `sticky` will trap the `fixed` dialog’s z-index in some sidebars #3732 */
-	/* Higher than sticky readme header #4192 */
+/* Higher than sticky readme header https://github.com/refined-github/refined-github/issues/8462 */
+.rgh-sticky-sidebar:has(.details-overlay[open]) {
 	z-index: 90;
-}
-
-#partial-discussion-sidebar.rgh-sticky-sidebar {
-	z-index: 1;
-}
-
-/* Hides the last divider (on pull requests) to avoid https://user-images.githubusercontent.com/10238474/62282128-af6fb980-b457-11e9-8b18-c29687b88da1.gif */
-.rgh-sticky-sidebar + .border-top {
-	display: none;
-}
-
-/* Avoid z-index issue with Stars dropdown in repo header #5214 */
-[rgh-sticky-sidebar-enabled] .pagehead-actions .js-user-list-menu {
-	z-index: unset;
-}
-
-/* z-index fights - header on issue side */
-div[data-testid='issue-metadata-sticky'] {
-	z-index: 92; /* Native: 14 */
-}
-
-/* z-index fights 🥲 This is the search dropdown on the repo root #6151 */
-html[rgh-sticky-sidebar-enabled]:has(.rgh-sticky-sidebar)
-	.search-input.expanded
-	.search-with-dialog {
-	z-index: 95; /* Native: 35 */
-}
-
-html[rgh-sticky-sidebar-enabled]:has(.rgh-sticky-sidebar)
-	.search-input.expanded
-	.dark-backdrop {
-	z-index: 92; /* Native: 32 */
 }

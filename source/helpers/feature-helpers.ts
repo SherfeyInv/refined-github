@@ -1,6 +1,6 @@
 export const shortcutMap = new Map<string, string>();
 
-export const getFeatureID = (url: string): FeatureID => url.split('/').pop()!.split('.')[0] as FeatureID;
+export const getFeatureId = (url: string): FeatureId => url.split('/').pop()!.split('.', 1)[0] as FeatureId;
 
 type FeatureHelper = {
 	/** If `import.meta.url` is passed as URL, this will be the feature ID */
@@ -14,7 +14,7 @@ type FeatureHelper = {
 };
 
 export function getIdentifiers(url: string): FeatureHelper {
-	const id = getFeatureID(url);
+	const id = getFeatureId(url);
 	return {
 		id,
 		class: 'rgh-' + id,
@@ -22,27 +22,27 @@ export function getIdentifiers(url: string): FeatureHelper {
 	};
 }
 
-function noop(): void {}
+function noop(): void {/* empty */}
 
 const httpLog = console.log.bind(console, '🌏');
 
 export const log = {
 	info: console.log,
 	http: httpLog,
-	setup({logging, logHTTP}: {logging: boolean; logHTTP: boolean}): void {
+	setup({logging, logHttp}: {logging: boolean; logHttp: boolean}): void {
 		log.info = logging ? console.log : noop;
-		log.http = logHTTP ? httpLog : noop;
+		log.http = logHttp ? httpLog : noop;
 	},
 };
 
-let _isInitialLoad = true;
+let isInitialLoadValue = true;
 
 export function isInitialLoad(): boolean {
-	return _isInitialLoad;
+	return isInitialLoadValue;
 }
 
 export function markAjaxedLoad(): void {
-	_isInitialLoad = false;
+	isInitialLoadValue = false;
 }
 
 export function listenToAjaxedLoad(): void {

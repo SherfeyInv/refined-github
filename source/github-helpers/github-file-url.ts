@@ -2,28 +2,19 @@ import {isRepoRoot} from 'github-url-detection';
 
 import getCurrentGitRef from './get-current-git-ref.js';
 
-export default class GitHubFileURL {
+export default class GitHubFileUrl {
+	private readonly internalUrl: URL;
+
 	user = '';
 	repository = '';
 	route = '';
 	branch = '';
 	filePath = '';
 
-	private readonly internalUrl: URL;
-
 	constructor(url: string) {
 		// Use Facade pattern instead of inheritance #3193
 		this.internalUrl = new URL(url);
 		this.pathname = this.internalUrl.pathname;
-	}
-
-	toString(): string {
-		return this.href;
-	}
-
-	assign(...replacements: Array<Partial<GitHubFileURL>>): this {
-		Object.assign(this, ...replacements);
-		return this;
 	}
 
 	// Handle branch names containing multiple slashes #4492
@@ -54,10 +45,14 @@ export default class GitHubFileURL {
 		}
 
 		for (const [index, section] of currentBranchSections.entries()) {
-			if (ambiguousReference[index] !== section) {
-				console.warn(`The supplied path (${ambiguousReference.join('/')}) is ambiguous (current reference is \`${currentBranch}\`)`);
-				return {branch, filePath};
+			if (ambiguousReference[index] === section) {
+				continue;
 			}
+
+			console.warn(
+				`The supplied path (${ambiguousReference.join('/')}) is ambiguous (current reference is \`${currentBranch}\`)`,
+			);
+			return {branch, filePath};
 		}
 
 		return {
@@ -66,20 +61,34 @@ export default class GitHubFileURL {
 		};
 	}
 
+	toString(): string {
+		return this.href;
+	}
+
+	assign(...replacements: Array<Partial<GitHubFileUrl>>): this {
+		Object.assign(this, ...replacements);
+		return this;
+	}
+
 	get pathname(): string {
-		return `/${this.user}/${this.repository}/${this.route}/${this.branch}/${this.filePath}`.replaceAll(/(?:(?:undefined)?\/)+$/g, '');
+		return '/' + [this.user, this.repository, this.route, this.branch, this.filePath]
+			.filter(Boolean)
+			.join('/');
 	}
 
 	set pathname(pathname: string) {
-		const [user, repository, route, ...ambiguousReference] = pathname.replaceAll(/^\/|\/$/g, '').split('/');
-		// TODO: `isRepoRoot` uses global state https://github.com/refined-github/refined-github/issues/6637
-		if (isRepoRoot() || (ambiguousReference.length === 2 && ambiguousReference[1].includes('%2F'))) {
-			const branch = ambiguousReference.join('/').replaceAll('%2F', '/');
+		const [user, repository, route, ...ambiguousReference] = pathname
+			.replaceAll(/^\/|\/$/g, '')
+			.replaceAll('%2F', '/') // Escaped in some cases
+			.split('/');
+
+		// If GitHubFileURL is being used on the current URL, then allow its "same page" optimizations to work (i.e. parse document.title)
+		if (pathname === location.pathname ? isRepoRoot() : isRepoRoot(new URL(pathname, this.internalUrl))) {
 			this.assign({
 				user,
 				repository,
 				route,
-				branch,
+				branch: ambiguousReference.join('/'),
 				filePath: '',
 			});
 			return;

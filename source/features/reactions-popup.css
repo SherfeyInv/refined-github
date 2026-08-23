@@ -1,0 +1,54 @@
+/* Restore two-line layout */
+:root .dropdown-menu-reactions {
+	display: grid !important;
+	/* Keep two lines whether there are 6 or 8 reactions */
+	grid-template-rows: 1fr 1fr;
+	grid-auto-flow: column;
+
+	/* Move the popups */
+	/* Align the popups to the border + add 10px to make them overflow a bit */
+	/* Button on the top right of comments */
+	&.dropdown-menu-w {
+		/* Depends on the presence of `quick-comment-edit` */
+		translate: 107px -22px;
+	}
+
+	&.dropdown-menu-se {
+		/* Keep in view on mobile too */
+		/* https://github.com/refined-github/refined-github/issues/8605 */
+		translate: -28px -62px;
+	}
+
+	/* Button on the bottom left of comments */
+	&.dropdown-menu-ne {
+		translate: -27px 61px;
+	}
+}
+
+/* React Issue View */
+:root div[data-visibility-visible]:has([class*='ReactionsMenuItem-module']) {
+	& > ul {
+		display: grid !important;
+		/* Keep two lines whether there are 6 or 8 reactions */
+		grid-template-rows: 1fr 1fr;
+		grid-auto-flow: column;
+	}
+
+	/* Reset the width */
+	min-width: 0px !important;
+
+	/* Center, but keep in view on mobile too */
+	/* https://github.com/refined-github/refined-github/issues/8605 */
+	translate: -28px -56px;
+}
+
+/*
+
+Test URLs:
+
+- https://github.com/refined-github/sandbox/issues/3
+- https://github.com/refined-github/sandbox/pull/4
+- https://github.com/refined-github/sandbox/releases
+- https://github.com/vitest-dev/vitest/discussions/4631
+
+*/

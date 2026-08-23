@@ -1,10 +1,8 @@
 import './align-issue-labels.css';
 
-import * as pageDetect from 'github-url-detection';
-
 import features from '../feature-manager.js';
 
-void features.addCssFeature(import.meta.url, [pageDetect.isIssueOrPRList]);
+void features.addCssFeature(import.meta.url);
 
 /*
 
@@ -13,6 +11,7 @@ void features.addCssFeature(import.meta.url, [pageDetect.isIssueOrPRList]);
 https://github.com/pulls
 https://github.com/bmish/eslint-doc-generator/pulls
 https://github.com/bmish/eslint-doc-generator/issues
-https://github.com/bmish/eslint-doc-generator/milestone/1
+https://github.com/bmish/eslint-doc-generator/milestone/1?closed=1
+https://github.com/nrwl/nx/issues
 
 */

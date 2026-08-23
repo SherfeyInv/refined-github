@@ -2,22 +2,22 @@ import './default-branch-button.css';
 
 import React from 'dom-chef';
 import * as pageDetect from 'github-url-detection';
-import ChevronLeftIcon from 'octicons-plain-react/ChevronLeft';
-import {$optional} from 'select-dom/strict.js';
 import memoize from 'memoize';
+import ChevronLeftIcon from 'octicons-plain-react/ChevronLeft';
+import {$optional} from 'select-dom';
 
 import features from '../feature-manager.js';
-import GitHubFileURL from '../github-helpers/github-file-url.js';
-import {groupButtons} from '../github-helpers/group-buttons.js';
 import getDefaultBranch from '../github-helpers/get-default-branch.js';
-import observe from '../helpers/selector-observer.js';
-import {branchSelector} from '../github-helpers/selectors.js';
-import isDefaultBranch from '../github-helpers/is-default-branch.js';
+import GitHubFileUrl from '../github-helpers/github-file-url.js';
+import {groupButtons} from '../github-helpers/group-buttons.js';
 import {fixFileHeaderOverlap, isRepoCommitListRoot} from '../github-helpers/index.js';
-import {expectToken} from '../github-helpers/github-token.js';
+import isDefaultBranch from '../github-helpers/is-default-branch.js';
+import {branchSelector} from '../github-helpers/selectors.js';
+import observe from '../helpers/selector-observer.js';
+import {withTooltipRef} from '../components/tooltip.js';
 
 const getUrl = memoize(async (currentUrl: string): Promise<string> => {
-	const defaultUrl = new GitHubFileURL(currentUrl);
+	const defaultUrl = new GitHubFileUrl(currentUrl);
 	if (pageDetect.isRepoRoot()) {
 		// The default branch of the root directory is just /user/repo/
 		defaultUrl.route = '';
@@ -29,8 +29,8 @@ const getUrl = memoize(async (currentUrl: string): Promise<string> => {
 	return defaultUrl.href;
 });
 
-async function updateUrl(event: React.MouseEvent<HTMLAnchorElement>): Promise<void> {
-	event.currentTarget.href = await getUrl(location.href);
+async function updateUrl({currentTarget: link}: React.MouseEvent<HTMLAnchorElement>): Promise<void> {
+	link.href = await getUrl(location.href);
 }
 
 function wrapButtons(buttons: HTMLElement[]): void {
@@ -41,14 +41,14 @@ function wrapButtons(buttons: HTMLElement[]): void {
 	buttons.at(-1)!.classList.add('rounded-left-0');
 }
 
-async function add(branchSelector: HTMLElement): Promise<void> {
+async function add(branchSelectorElement: HTMLElement): Promise<void> {
 	// The DOM varies between details-based DOM and React-based one
-	const selectorWrapper = branchSelector.tagName === 'SUMMARY'
-		? branchSelector.parentElement!
-		: branchSelector;
+	const selectorWrapper = branchSelectorElement.tagName === 'SUMMARY'
+		? branchSelectorElement.parentElement!
+		: branchSelectorElement;
 	selectorWrapper.classList.add('rgh-highlight-non-default-branch');
 
-	const existingLink = $optional('.rgh-default-branch-button', branchSelector.parentElement!);
+	const existingLink = $optional('.rgh-default-branch-button', branchSelectorElement.parentElement!);
 
 	// React issues. Duplicates appear after a color scheme update
 	// https://github.com/refined-github/refined-github/issues/7098
@@ -59,14 +59,14 @@ async function add(branchSelector: HTMLElement): Promise<void> {
 	}
 
 	if (pageDetect.isSingleFile()) {
-		fixFileHeaderOverlap(branchSelector);
+		fixFileHeaderOverlap(branchSelectorElement);
 	}
 
 	const defaultLink = (
 		<a
-			className="btn tooltipped tooltipped-se px-2 rgh-default-branch-button flex-self-start"
+			ref={withTooltipRef({label: 'View on the default branch', direction: 'se'})}
+			className="btn px-2 tmp-px-2 rgh-default-branch-button flex-self-start"
 			href={await getUrl(location.href)}
-			aria-label="See this view on the default branch"
 			// Update on hover because the URL may change without a DOM refresh
 			// https://github.com/refined-github/refined-github/issues/6554
 			// Inlined listener because `mouseenter` is too heavy for `delegate`
@@ -84,7 +84,6 @@ async function add(branchSelector: HTMLElement): Promise<void> {
 }
 
 async function init(signal: AbortSignal): Promise<void> {
-	await expectToken();
 	observe(branchSelector, add, {signal});
 }
 
@@ -97,6 +96,7 @@ void features.add(import.meta.url, {
 	exclude: [
 		isDefaultBranch,
 	],
+	requiresToken: true,
 	init,
 });
 

@@ -1,8 +1,9 @@
 import React from 'dom-chef';
+import {closestElementOptional} from 'select-dom';
 
-import onetime from '../helpers/onetime.js';
 import features from '../feature-manager.js';
 import {wrap} from '../helpers/dom-utils.js';
+import onetime from '../helpers/onetime.js';
 import observe from '../helpers/selector-observer.js';
 
 function addLocation({nextElementSibling, nextSibling}: SVGElement): Element {
@@ -10,13 +11,13 @@ function addLocation({nextElementSibling, nextSibling}: SVGElement): Element {
 	const userLocation = nextElementSibling ?? nextSibling as Element;
 
 	const locationName = userLocation.textContent.trim();
-	const googleMapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationName)}`;
+	const mapLink = `https://www.openstreetmap.org/search?query=${encodeURIComponent(locationName)}`;
 
 	userLocation.before(' '); // Keeps the link’s underline from extending out to the icon
-	const link = <a className="Link--primary" href={googleMapsLink} />;
+	const link = <a className="Link--primary" href={mapLink} />;
 
-	if (userLocation.parentElement!.closest('.Popover')) {
-	// Match the style of other links in the hovercard
+	if (closestElementOptional('.Popover', userLocation.parentElement!)) {
+		// Match the style of other links in the hovercard
 		link.classList.add('text-underline');
 	}
 
@@ -28,7 +29,9 @@ function addLocation({nextElementSibling, nextSibling}: SVGElement): Element {
 function initOnce(): void {
 	observe([
 		'[itemprop="homeLocation"] svg.octicon-location', // `isUserProfile`
-		'[aria-label="User location"] svg.octicon-location', // Hover cards
+		'.pagehead .has-location svg.octicon-location', // `isOrganizationProfile`
+		'[aria-label="User location"] svg.octicon-location', // User hover cards
+		'[aria-label="Organization Hovercard"] svg.octicon-location', // Organization hover cards
 	], addLocation);
 }
 
@@ -41,7 +44,8 @@ void features.add(import.meta.url, {
 
 Test URLs
 
-https://github.com/docubot
-https://github.com/
+- isUserProfile: https://github.com/mysticatea
+- isOrganizationProfile: https://github.com/github
+- Hover cards: https://github.com/
 
 */

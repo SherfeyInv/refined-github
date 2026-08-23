@@ -15,10 +15,16 @@
 		"screenshot": "https://user-images.githubusercontent.com/1402241/69044026-c5b17d80-0a26-11ea-86ae-c95f89d3669a.png"
 	},
 	{
+		"id": "actions-run-removal",
+		"description": "Lets you cancel or delete workflow runs faster from the workflow list.",
+		"css": true,
+		"screenshot": "https://github.com/user-attachments/assets/a054f9b4-9d56-40c0-9aac-09a8b07bbb3b"
+	},
+	{
 		"id": "align-issue-labels",
 		"description": "In issue/PR lists, aligns the labels to the left, below each title.",
 		"css": true,
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/261160640-28ae4f12-0e95-4db5-a79c-e89ae523a4d0.png"
+		"screenshot": "https://github.com/user-attachments/assets/dca5dc12-7283-4704-a93f-5bfe5f2b1938"
 	},
 	{
 		"id": "archive-forks-link",
@@ -37,23 +43,24 @@
 	},
 	{
 		"id": "bugs-tab",
-		"description": "Adds a \"Bugs\" tab to repos, if there are any open issues with the \"bug\" label.",
+		"description": "Adds a \"Bugs\" tab to repos, if there are any open issues with the \"bug\" label (depends on <code>extensible-nav</code> feature).",
 		"screenshot": "https://user-images.githubusercontent.com/46634000/156766081-f2ea100b-a9f3-472b-bddc-a984a88ddcd3.png"
 	},
 	{
-		"id": "ci-link",
-		"description": "Adds a build/CI status icon next to the repo’s name.",
+		"id": "clean-checks-list",
+		"description": "Prioritizes failing and pending checks in the merge checks list, and untruncates long check names.",
 		"css": true,
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/1402241/237923995-5e14a272-0bf2-4fe4-b409-8c05378aa4fd.png"
+		"cssOnly": true,
+		"screenshot": null
 	},
 	{
 		"id": "clean-conversation-filters",
-		"description": "Hides <code>Projects</code> and <code>Milestones</code> filters in issue/PR lists if they are empty.",
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/262557246-4ef1c702-eece-4701-9000-0aad21c54c1b.png"
+		"description": "Hides <code>Projects</code> filter in issue/PR lists if it is empty.",
+		"screenshot": "https://github.com/user-attachments/assets/b690405f-b138-413d-9779-9467c160e802"
 	},
 	{
 		"id": "clean-conversation-headers",
-		"description": "Removes duplicate information in the header of issues and PRs (\"User wants to merge X commits from Y into Z\")",
+		"description": "Removes duplicate information in the header of PRs (\"User wants to merge X commits from Y into Z\")",
 		"css": true,
 		"screenshot": "https://user-images.githubusercontent.com/44045911/112314137-a34b0680-8ce3-11eb-9e0e-8afd6c8235c2.png"
 	},
@@ -62,6 +69,20 @@
 		"description": "Hides empty sections (or just their \"empty\" label) in the issue/PR sidebar.",
 		"css": true,
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/253054419-48c38c01-b1dc-42ca-9ff6-fd63392b5921.png"
+	},
+	{
+		"id": "clean-footer",
+		"description": "Dims the site footer so it's less prominent.",
+		"css": true,
+		"cssOnly": true,
+		"screenshot": null
+	},
+	{
+		"id": "clean-notifications",
+		"description": "Makes the notifications list more compact when grouped by repo.",
+		"css": true,
+		"cssOnly": true,
+		"screenshot": null
 	},
 	{
 		"id": "clean-pinned-issues",
@@ -77,6 +98,7 @@
 	{
 		"id": "clean-repo-filelist-actions",
 		"description": "Makes some buttons on repository lists more compact to make room for other features.",
+		"css": true,
 		"screenshot": "https://user-images.githubusercontent.com/1402241/108955170-52d48080-7633-11eb-8979-67e0d3a53f16.png"
 	},
 	{
@@ -84,11 +106,6 @@
 		"description": "Removes unnecessary or redundant information from the repository sidebar.",
 		"css": true,
 		"screenshot": "https://user-images.githubusercontent.com/46634000/107955448-18694480-6f9e-11eb-8bc6-80cc90d910bc.png"
-	},
-	{
-		"id": "clean-repo-tabs",
-		"description": "Moves the \"Security\" and \"Insights\"  to the repository navigation dropdown. Also moves the \"Projects\", \"Actions\" and \"Wiki\" tabs if they're empty/unused.",
-		"screenshot": "https://user-images.githubusercontent.com/16872793/124681343-4a6c3c00-de96-11eb-9055-a8fc551e6eb8.png"
 	},
 	{
 		"id": "clean-rich-text-editor",
@@ -122,24 +139,24 @@
 		"screenshot": "https://user-images.githubusercontent.com/1402241/169497171-85d4a97f-413a-41b4-84ba-885dca2b51cf.png"
 	},
 	{
+		"id": "cmd-enter",
+		"description": "Fixes <kbd>cmd</kbd> <kbd>enter</kbd> to submit comments on closed PRs, which is broken.",
+		"screenshot": "https://github.com/user-attachments/assets/e972239b-6a28-42a4-9bac-fd71aa5a465f"
+	},
+	{
 		"id": "collapsible-content-button",
-		"description": "Adds a button to insert collapsible content (via <code>&lt;details&gt;</code>).",
+		"description": "Adds a button in the text editor to insert collapsible content (via <code>&lt;details&gt;</code>).",
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/260875648-bd495d27-4cd1-4190-bcc5-b8b476f07d39.png"
-	},
-	{
-		"id": "command-palette-navigation-shortcuts",
-		"description": "Adds keyboard shortcuts to select items in command palette using <kbd>ctrl</kbd> <kbd>n</kbd> and <kbd>ctrl</kbd> <kbd>p</kbd> (macOS only).",
-		"screenshot": null
-	},
-	{
-		"id": "comment-excess",
-		"description": "Informs you that there are hidden comments in the header of long issues. Also scrolls down to the hidden comments when pressing Cmd+F or Ctrl+F.",
-		"screenshot": "https://github.com/refined-github/refined-github/assets/1402241/4e4660f9-c987-4b0d-82ca-56ef29952c31"
 	},
 	{
 		"id": "comments-time-machine-links",
 		"description": "Adds links to browse the repository and linked files at the time of each comment.",
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/252749373-9313f1d9-3d92-44a2-a1d1-2b49a29e6a5c.png"
+	},
+	{
+		"id": "confirm-release",
+		"description": "Adds a confirmation dialog when publishing a release, preventing accidental submissions.",
+		"screenshot": "https://github.com/user-attachments/assets/6cff805d-3825-43c4-ac20-38c76decd858"
 	},
 	{
 		"id": "conflict-marker",
@@ -170,11 +187,6 @@
 		"screenshot": "https://user-images.githubusercontent.com/16872793/78712349-82c54900-78e6-11ea-8328-3c2d39a78862.png"
 	},
 	{
-		"id": "convert-pr-to-draft-improvements",
-		"description": "Moves the \"Convert PR to Draft\" button to the mergeability box and adds visual feedback to its confirm button.",
-		"screenshot": "https://user-images.githubusercontent.com/1402241/95644892-885f3f80-0a7f-11eb-8428-8e0fb0c8dfa5.gif"
-	},
-	{
 		"id": "convert-release-to-draft",
 		"description": "Adds a button to convert a release to draft.",
 		"screenshot": "https://user-images.githubusercontent.com/46634000/139236979-44533bfd-5c17-457d-bdc1-f9ec395f6a3a.png"
@@ -182,7 +194,7 @@
 	{
 		"id": "copy-on-y",
 		"description": "Enhances the <kbd>y</kbd> hotkey to also copy the permalink.",
-		"screenshot": null
+		"screenshot": "https://github.com/user-attachments/assets/2237c549-5fc8-405c-8a72-7da518d23b0e"
 	},
 	{
 		"id": "create-release-shortcut",
@@ -228,14 +240,14 @@
 		"screenshot": "https://user-images.githubusercontent.com/47531779/99855419-be173e00-2b7e-11eb-9a55-0f6251aeb0ef.gif"
 	},
 	{
+		"id": "easy-toggle-hidden-comments",
+		"description": "Enables toggling hidden comments and resolved/outdated review threads by clicking on their header bar.",
+		"screenshot": "https://github.com/user-attachments/assets/d002c991-621e-4ac2-adac-099916af107f"
+	},
+	{
 		"id": "embed-gist-inline",
 		"description": "Embeds short gists when linked in comments on their own lines.",
 		"screenshot": "https://user-images.githubusercontent.com/1402241/152117903-80d784d5-4f43-4786-bc4c-d4993aec5c79.png"
-	},
-	{
-		"id": "embed-gist-via-iframe",
-		"description": "Adds a menu item to embed a gist via <code>&lt;iframe&gt;</code>.",
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/258553891-a55a3bc0-f244-421b-a24c-6f1d4a92552e.png"
 	},
 	{
 		"id": "emphasize-draft-pr-label",
@@ -245,7 +257,7 @@
 	},
 	{
 		"id": "esc-to-cancel",
-		"description": "Adds a shortcut to cancel editing a issue/PR title: <kbd>esc</kbd>.",
+		"description": "Adds a shortcut to cancel editing a PR title: <kbd>esc</kbd>.",
 		"screenshot": "https://user-images.githubusercontent.com/35100156/98303086-d81d2200-1fbd-11eb-8529-70d48d889bcf.gif"
 	},
 	{
@@ -260,7 +272,7 @@
 	},
 	{
 		"id": "extend-conversation-status-filters",
-		"description": "Lets you toggle between is:open/is:closed/is:merged filters in searches.",
+		"description": "Lets you toggle between open/closed/merged filters in searches.",
 		"screenshot": "https://user-images.githubusercontent.com/1402241/73605061-2125ed00-45cc-11ea-8cbd-41a53ae00cd3.gif"
 	},
 	{
@@ -268,6 +280,17 @@
 		"description": "Widens the <code>Expand diff</code> button to be clickable across the screen.",
 		"css": true,
 		"screenshot": "https://user-images.githubusercontent.com/1402241/152118201-f25034c7-6fae-4be0-bb3f-c217647e32b7.gif"
+	},
+	{
+		"id": "extend-repo-tabs",
+		"description": "Collapses repository tabs if rarely used (Insights, Security) or when empty (Projects, Wiki, Actions). It also adds counters to Projects and Wiki.",
+		"screenshot": "https://github.com/user-attachments/assets/e7fa93ff-fc01-410d-b4da-f1fb96a85326"
+	},
+	{
+		"id": "extensible-nav",
+		"description": "Beta: This is a core feature that enables other Refined GitHub features to extend or modify the repository navigation bar. Currently opt-in for testing.",
+		"css": true,
+		"screenshot": null
 	},
 	{
 		"id": "file-age-color",
@@ -291,16 +314,22 @@
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/252181237-a1d809b1-e5d4-4747-9654-7dde5ab5c61a.png"
 	},
 	{
+		"id": "github-bugs",
+		"description": "Applies various CSS fixes to GitHub's interface.",
+		"css": true,
+		"cssOnly": true,
+		"screenshot": null
+	},
+	{
 		"id": "global-conversation-list-filters",
-		"description": "Adds filters for issues/PRs <em>in your repos</em> and <em>commented on by you</em> in the global issue/PR search.",
+		"description": "Adds filters for PRs <em>in your repos</em> and <em>commented on by you</em> in the global PR search.",
 		"css": true,
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/253048449-2f7cc331-c379-4ec0-a542-441e8b4f8d79.png"
 	},
 	{
-		"id": "hidden-review-comments-indicator",
-		"description": "Adds comment indicators when comments are hidden in PR review.",
-		"css": true,
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/253128043-a10eaf9e-ff81-48db-b67c-ee823804c859.gif"
+		"id": "hidden-content",
+		"description": "Informs you that there are hidden comments or files when pressing <kbd>Cmd</kbd><kbd>F</kbd> or <kbd>Ctrl</kbd><kbd>F</kbd>.",
+		"screenshot": "https://github.com/user-attachments/assets/5437d8fc-c539-4d13-98b3-d7049d2d92e7"
 	},
 	{
 		"id": "hide-diff-signs",
@@ -312,11 +341,6 @@
 		"id": "hide-inactive-deployments",
 		"description": "Hides inactive deployments in PRs.",
 		"screenshot": null
-	},
-	{
-		"id": "hide-issue-list-autocomplete",
-		"description": "Removes the autocomplete on search fields.",
-		"screenshot": "https://user-images.githubusercontent.com/1402241/42991841-1f057e4e-8c07-11e8-909c-b051db7a2a03.png"
 	},
 	{
 		"id": "hide-low-quality-comments",
@@ -336,12 +360,6 @@
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/1402241/263195425-85cf0951-c6ed-45fe-8cfc-e447e3ed2a25.png"
 	},
 	{
-		"id": "highest-rated-comment",
-		"description": "Highlights the most useful comment in issues.",
-		"css": true,
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/252763905-a0c3b074-b032-4d97-946e-328e8a6fb2da.png"
-	},
-	{
 		"id": "highlight-non-default-base-branch",
 		"description": "Shows the base branch in PR lists if it’s not the default branch.",
 		"screenshot": "https://user-images.githubusercontent.com/1402241/88480306-39f4d700-cf4d-11ea-9e40-2b36d92d41aa.png"
@@ -354,12 +372,8 @@
 	{
 		"id": "improve-shortcut-help",
 		"description": "Shows all of Refined GitHub’s new keyboard shortcuts in the help modal (<kbd>?</kbd> hotkey).",
+		"css": true,
 		"screenshot": "https://user-images.githubusercontent.com/29176678/36999174-9f07d33e-20bf-11e8-83e3-b3a9908a4b5f.png"
-	},
-	{
-		"id": "jump-to-change-requested-comment",
-		"description": "Adds a link to jump to the latest changed requested comment.",
-		"screenshot": "https://user-images.githubusercontent.com/19198931/98718312-418b9f00-23c9-11eb-8da2-dfb616e95eb6.gif"
 	},
 	{
 		"id": "jump-to-conversation-close-event",
@@ -368,13 +382,18 @@
 	},
 	{
 		"id": "keyboard-navigation",
-		"description": "Adds shortcuts to issues, PRs conversations, and PR file lists: <kbd>j</kbd> focuses the comment/file below; <kbd>k</kbd> focuses the comment/file above.",
+		"description": "Adds shortcuts to issues, PRs conversations, and PR file lists: <kbd>j</kbd> focuses the comment/file below; <kbd>k</kbd> focuses the comment/file above; <kbd>x</kbd> marks the file as viewed/unviewed.",
 		"screenshot": "https://user-images.githubusercontent.com/1402241/86573176-48665900-bf74-11ea-8996-a5c46cb7bdfd.gif"
 	},
 	{
 		"id": "last-notification-page-button",
 		"description": "Adds a link to the last page of notifications.",
 		"screenshot": "https://user-images.githubusercontent.com/16872793/199828181-3ff2cef3-8740-4efa-8122-8f2f222bd657.png"
+	},
+	{
+		"id": "last-update-sort",
+		"description": "Changes the default sort order of issues/PRs to <code>Recently updated</code>.",
+		"screenshot": null
 	},
 	{
 		"id": "link-to-changelog-file",
@@ -399,7 +418,7 @@
 	},
 	{
 		"id": "linkify-code",
-		"description": "Linkifies issue/PR references and URLs in code and issue/PR titles.",
+		"description": "Linkifies issue/PR references and URLs in code.",
 		"screenshot": "https://cloud.githubusercontent.com/assets/170270/25370217/61718820-29b3-11e7-89c5-2959eaf8cac8.png"
 	},
 	{
@@ -410,21 +429,23 @@
 	{
 		"id": "linkify-line-numbers",
 		"description": "Linkifies the line numbers where GitHub forgot to add links.",
+		"css": true,
 		"screenshot": "https://github.com/refined-github/refined-github/assets/1402241/d5b67f4e-35c3-45d8-b72c-937b855168c3"
 	},
 	{
-		"id": "linkify-symbolic-links",
-		"description": "Linkifies symbolic links files.",
-		"screenshot": "https://user-images.githubusercontent.com/1402241/62036664-6d0e6880-b21c-11e9-9270-4ae30cc10de2.png"
+		"id": "linkify-pr-review-state",
+		"description": "Linkifies the PR review state labels (\"Draft\", \"Changes requested\", etc) in PR lists to filter by that state.",
+		"screenshot": "https://github.com/user-attachments/assets/9c59ba75-d2f2-41d4-a214-24d123f78428"
 	},
 	{
-		"id": "linkify-user-edit-history-popup",
-		"description": "Linkifies the username in the edit history popup.",
-		"screenshot": "https://user-images.githubusercontent.com/1402241/88917988-9ebb7480-d260-11ea-8690-0a3440f1ebbc.png"
+		"id": "linkify-text",
+		"description": "Makes certain text clickable, like issue references in the issue title and discussion sidebar.",
+		"screenshot": "https://github.com/user-attachments/assets/1d31f695-c198-477e-a3ae-cc0687417a90"
 	},
 	{
 		"id": "linkify-user-labels",
-		"description": "Links the \"Contributor\" and \"Member\" labels on comments to the author’s commits on the repo.",
+		"description": "Links the \"Contributor\", \"Member\" and \"Collaborator\" labels on comments and PRs to the author’s commits on the repo.",
+		"css": true,
 		"screenshot": "https://user-images.githubusercontent.com/1402241/177033344-4d4eea63-e075-4096-b2d4-f4b879f1df31.png"
 	},
 	{
@@ -454,27 +475,44 @@
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/1402241/285106996-9bdbc938-69c4-4692-8d47-11e30676de62.png"
 	},
 	{
+		"id": "mark-pinned",
+		"description": "Marks pinned issues in the issues list so duplicate rows are immediately recognizable.",
+		"css": true,
+		"screenshot": "https://github.com/user-attachments/assets/8ca3eb03-9567-4894-ace3-98de4d453f86"
+	},
+	{
 		"id": "mark-private-orgs",
 		"description": "Marks private organizations on your own profile.",
 		"css": true,
 		"screenshot": "https://github.com/user-attachments/assets/145a7a97-7b8c-4ac4-8288-f72dcb4613ea"
 	},
 	{
-		"id": "mobile-tabs",
-		"description": "Makes the tabs more compact on mobile so more of them can be seen.",
+		"id": "mark-private-repos",
+		"description": "Highlights private repositories in the repository list with a distinct color.",
 		"css": true,
+		"cssOnly": true,
+		"screenshot": null
+	},
+	{
+		"id": "mobile-tabs",
+		"description": "Makes the tabs more compact on mobile so more of them can be seen (depends on <code>extensible-nav</code> feature).",
+		"css": true,
+		"cssOnly": true,
 		"screenshot": "https://user-images.githubusercontent.com/1402241/245446231-28f44b59-0151-4986-8cb9-05b5645592d8.png"
 	},
 	{
-		"id": "more-conversation-filters",
-		"description": "Adds <code>Everything you’re involved in</code> and <code>Everything you subscribed to</code> filters in the search box dropdown.",
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/253043952-cfb99cea-1c7b-43ad-9144-9d84bda8206f.png"
+		"id": "mobile-tabs-pr",
+		"description": "Makes the PR tabs smaller so they fit in the screen without scrolling.",
+		"css": true,
+		"cssOnly": true,
+		"screenshot": null
 	},
 	{
-		"id": "more-dropdown-links",
-		"description": "Adds useful links to the repository navigation dropdown",
+		"id": "monospace-textareas",
+		"description": "Uses a monospace font in commit message, description, release body, and other fields that benefit from it.",
 		"css": true,
-		"screenshot": "https://user-images.githubusercontent.com/16872793/124681432-856e6f80-de96-11eb-89c9-6d78e8ae4329.png"
+		"cssOnly": true,
+		"screenshot": null
 	},
 	{
 		"id": "more-file-links",
@@ -487,6 +525,11 @@
 		"screenshot": "https://github.com/user-attachments/assets/8646d663-7458-4e6d-888a-68d38110fcda"
 	},
 	{
+		"id": "new-milestone-button",
+		"description": "Adds a 'New Milestone' button to the milestone page.",
+		"screenshot": "https://github.com/user-attachments/assets/1fceb336-6d32-4733-afe0-9971989b1987"
+	},
+	{
 		"id": "new-or-deleted-file",
 		"description": "Indicates with an icon whether files in commits and PRs are being added or removed.",
 		"screenshot": "https://user-images.githubusercontent.com/1402241/90332474-23262b00-dfb5-11ea-9a03-8fd676ea0fdd.png"
@@ -494,12 +537,34 @@
 	{
 		"id": "new-repo-disable-projects-and-wikis",
 		"description": "Automatically disables projects and wikis when creating a repository.",
-		"screenshot": "https://user-images.githubusercontent.com/1402241/177040449-73fde2a5-98e2-4583-8f32-905d1c4bfd20.png"
+		"screenshot": "https://github.com/user-attachments/assets/2537e5a0-f537-4901-8d11-96c1f536663e"
+	},
+	{
+		"id": "new-tab-links",
+		"description": "Lets you open pseudo-links in a new tab with <kbd>ctrl</kbd> <kbd>click</kbd> or middle click.",
+		"screenshot": null
+	},
+	{
+		"id": "night-not-found",
+		"description": "Adds dark mode to the global 404 page.",
+		"css": true,
+		"cssOnly": true,
+		"screenshot": null
 	},
 	{
 		"id": "no-duplicate-list-update-time",
 		"description": "Hides the update time of issues/PRs in lists when it matches the open/closed/merged time.",
 		"screenshot": "https://user-images.githubusercontent.com/1402241/111357166-ac3a3900-864e-11eb-884a-d6d6da88f7e2.png"
+	},
+	{
+		"id": "no-modals",
+		"description": "Disable modals that reduce user-experience instead of enhancing it.",
+		"screenshot": "https://github.com/user-attachments/assets/7b63c7db-ae31-4ee8-8510-3b9db0c11f3e"
+	},
+	{
+		"id": "no-self-reference",
+		"description": "Warns against self-reference links, helping you avoid mistakes.",
+		"screenshot": "https://github.com/user-attachments/assets/f5f7a3da-513e-4eff-9571-1cdb72fac2bd"
 	},
 	{
 		"id": "no-unnecessary-split-diff-view",
@@ -508,9 +573,15 @@
 		"screenshot": "https://user-images.githubusercontent.com/46634000/121495005-89af8600-c9d9-11eb-822d-77e0b987e3b1.png"
 	},
 	{
+		"id": "notifications-ui",
+		"description": "Cleans up the Notifications page header, especially on mobile.",
+		"css": true,
+		"screenshot": "https://github.com/user-attachments/assets/88b96125-83a1-4550-bf2d-ec1bac264783"
+	},
+	{
 		"id": "one-click-diff-options",
-		"description": "Adds one-click buttons to change diff style and to ignore the whitespace and a keyboard shortcut to ignore the whitespace: <kbd>d</kbd> <kbd>w</kbd>.",
-		"screenshot": "https://user-images.githubusercontent.com/46634000/156766044-18c9ff50-aead-4c40-ba16-7428b3742b6c.png"
+		"description": "Adds \"Hide whitespace\" button to Compare pages and a keyboard shortcut to PRs and Compare pages: <kbd>d</kbd> <kbd>w</kbd>.",
+		"screenshot": "https://github.com/user-attachments/assets/0b92992a-69a4-4de1-ab2a-cb6508870b4a"
 	},
 	{
 		"id": "one-click-pr-or-gist",
@@ -531,11 +602,11 @@
 	{
 		"id": "open-all-conversations",
 		"description": "Lets you open all visible issues/PRs at once.",
-		"screenshot": "https://user-images.githubusercontent.com/46634000/110980658-5face000-8366-11eb-88f9-0cc94f75ce57.gif"
+		"screenshot": "https://github.com/user-attachments/assets/0d890b01-d5ca-4247-8270-055dd6355606"
 	},
 	{
 		"id": "open-all-notifications",
-		"description": "Adds a button to open all your unread notifications at once.",
+		"description": "Adds a button to the notification page to open all your unread notifications at once.",
 		"css": true,
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/140871606/257085496-17e5c6fa-6bad-443d-96d2-d97e73cd1a5e.png"
 	},
@@ -543,11 +614,6 @@
 		"id": "open-issue-to-latest-comment",
 		"description": "Makes the \"comment\" icon in issue lists link to the latest comment of the issue.",
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/261159396-0610574b-ab1f-42fb-813f-ee7310a1e5b6.png"
-	},
-	{
-		"id": "pagination-hotkey",
-		"description": "Adds shortcuts to navigate through pages with pagination: <kbd>←</kbd> and <kbd>→</kbd>.",
-		"screenshot": null
 	},
 	{
 		"id": "parse-backticks",
@@ -569,6 +635,7 @@
 		"id": "pr-approvals-count",
 		"description": "Shows color-coded review counts in PR lists.",
 		"css": true,
+		"cssOnly": true,
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/253125143-d10d95df-4a89-4692-b218-5eba5cd79906.png"
 	},
 	{
@@ -584,7 +651,7 @@
 	{
 		"id": "pr-commit-lines-changed",
 		"description": "Adds diff stats on PR commits.",
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/253130044-494cd822-c460-42dc-8f65-44454a9d18e3.png"
+		"screenshot": "https://github.com/user-attachments/assets/eb0f5e6e-9870-4daf-8c00-f1f23f61ef0f"
 	},
 	{
 		"id": "pr-filters",
@@ -622,11 +689,6 @@
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/260087535-a0f19995-5f4a-44e9-87d8-cf742b9bfeed.gif"
 	},
 	{
-		"id": "prevent-pr-merge-panel-opening",
-		"description": "Prevents the merge panel from automatically opening on every page load after it’s been opened once.",
-		"screenshot": null
-	},
-	{
 		"id": "preview-hidden-comments",
 		"description": "Previews hidden comments inline.",
 		"css": true,
@@ -641,11 +703,6 @@
 		"id": "previous-version",
 		"description": "Lets you see the previous version of a file in one click.",
 		"screenshot": "https://github.com/refined-github/refined-github/assets/1402241/bc82cc77-bde2-4683-98a6-012c87b4a319"
-	},
-	{
-		"id": "profile-gists-link",
-		"description": "Adds a link to the user’s public gists on their profile.",
-		"screenshot": "https://user-images.githubusercontent.com/44045911/87950518-f7a94100-cad9-11ea-8393-609fad70635c.png"
 	},
 	{
 		"id": "profile-hotkey",
@@ -686,14 +743,14 @@
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/261158402-5a79cc3e-4331-475f-8063-5ed81fefcf10.gif"
 	},
 	{
-		"id": "quick-new-issue",
-		"description": "Adds a link to create issues from anywhere in a repository.",
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/1402241/274816033-820ec518-049d-4248-9f8a-27b9423e350b.png"
-	},
-	{
 		"id": "quick-repo-deletion",
 		"description": "Simplifies the deletion of repositories. Adds \"Delete fork\" button on 0-star repos. Enables <kbd>shift</kbd> <kbd>alt</kbd> clicks to delete repos in 2 clicks.",
 		"screenshot": "https://github.com/user-attachments/assets/9e05ec18-680d-4fbd-acbd-2b5b3505c5b5"
+	},
+	{
+		"id": "quick-resolve-conflicts",
+		"description": "Turns the \"Resolve conflicts\" dropdown into two plain buttons.",
+		"screenshot": "https://github.com/user-attachments/assets/a4920731-340d-48ec-96d9-066a1ef0564d"
 	},
 	{
 		"id": "quick-review",
@@ -703,13 +760,27 @@
 	{
 		"id": "quick-review-comment-deletion",
 		"description": "Adds a button to delete review comments in one click when editing them.",
-		"screenshot": "https://user-images.githubusercontent.com/46634000/115445792-9fdd6900-a216-11eb-9ba3-6dab4d2f9d32.png"
+		"screenshot": "https://github.com/user-attachments/assets/4e56a9d8-5f6f-48f7-921a-8288c0eb5435"
 	},
 	{
 		"id": "reactions-avatars",
 		"description": "Adds reaction avatars showing <em>who</em> reacted to a comment.",
 		"css": true,
 		"screenshot": "https://user-images.githubusercontent.com/1402241/236628453-8b646178-b838-44a3-9541-0a9b5f54a84a.png"
+	},
+	{
+		"id": "reactions-popup",
+		"description": "Improves the usability of the comment reactions popup by making it smaller.",
+		"css": true,
+		"cssOnly": true,
+		"screenshot": null
+	},
+	{
+		"id": "readable-title-change-events",
+		"description": "Stacks the old and new titles in title change timeline events for better readability.",
+		"css": true,
+		"cssOnly": true,
+		"screenshot": null
 	},
 	{
 		"id": "refined-github.css",
@@ -724,12 +795,12 @@
 	},
 	{
 		"id": "releases-dropdown",
-		"description": "Adds a tags dropdown/search on tag/release pages.",
+		"description": "Adds a tags dropdown/search on release pages.",
 		"screenshot": "https://user-images.githubusercontent.com/1402241/231678527-f0a96112-9c30-4b49-8205-efa472bd880e.png"
 	},
 	{
 		"id": "releases-tab",
-		"description": "Adds a <code>Releases</code> tab and a keyboard shortcut: <kbd>g</kbd> <kbd>r</kbd>.",
+		"description": "Adds a <code>Releases</code> tab and a keyboard shortcut: <kbd>g</kbd> <kbd>r</kbd> (depends on <code>extensible-nav</code> feature).",
 		"screenshot": "https://cloud.githubusercontent.com/assets/170270/13136797/16d3f0ea-d64f-11e5-8a45-d771c903038f.png"
 	},
 	{
@@ -749,8 +820,9 @@
 	},
 	{
 		"id": "repo-header-info",
-		"description": "Shows whether a repo is a fork and adds the number of stars to its header.",
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/1402241/267216946-404d79ab-46d7-4bc8-ba88-ae8f8029150d.png"
+		"description": "Adds stars, CI, fork and private status to the repository header.",
+		"css": true,
+		"screenshot": "https://github.com/user-attachments/assets/6b115387-962c-4cf4-b864-c750f9c8e0b1"
 	},
 	{
 		"id": "repo-wide-file-finder",
@@ -758,9 +830,9 @@
 		"screenshot": null
 	},
 	{
-		"id": "resolve-conflicts",
-		"description": "Adds one-click merge conflict fixers.",
-		"screenshot": "https://user-images.githubusercontent.com/1402241/54978791-45906080-4fdc-11e9-8fe1-45374f8ff636.png"
+		"id": "rerun-workflow",
+		"description": "Unwraps the \"Re-run jobs\" dropdown into individual buttons and adds a keyboard shortcut to re-run failed jobs: <kbd>r</kbd> <kbd>f</kbd>.",
+		"screenshot": "https://github.com/user-attachments/assets/67331112-f5b2-4a2b-af43-800d46bd6bf7"
 	},
 	{
 		"id": "restore-file",
@@ -771,6 +843,11 @@
 		"id": "same-branch-author-commits",
 		"description": "Preserves current branch and path when viewing all commits by an author.",
 		"screenshot": "https://user-images.githubusercontent.com/44045911/148764372-ee443213-e61a-4227-9219-0ee54ed832e8.png"
+	},
+	{
+		"id": "same-page-links",
+		"description": "Keeps links from opening in new tabs when they shouldn't. \"Open in new tab\" must be the user's choice, not the default behavior.",
+		"screenshot": null
 	},
 	{
 		"id": "scrollable-areas",
@@ -807,7 +884,6 @@
 	{
 		"id": "show-names",
 		"description": "Adds the real name of users by their usernames.",
-		"css": true,
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/252756294-94785dc2-423e-498c-939a-359a012036e0.png"
 	},
 	{
@@ -833,12 +909,8 @@
 	{
 		"id": "small-user-avatars",
 		"description": "Shows a small avatar next to the username in issue/PR lists and mentions.",
+		"css": true,
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/1402241/271184107-24ec471e-54d1-434a-a5f2-615902d2cad9.png"
-	},
-	{
-		"id": "sort-conversations-by-update-time",
-		"description": "Changes the default sort order of issues/PRs to <code>Recently updated</code>.",
-		"screenshot": null
 	},
 	{
 		"id": "status-subscription",
@@ -846,15 +918,37 @@
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/1402241/238186901-cbc98b51-d173-40c6-b21e-5f0bae3d800c.png"
 	},
 	{
+		"id": "sticky-comment-header",
+		"description": "Makes the comment header sticky when scrolling through long comments.",
+		"css": true,
+		"screenshot": "https://github.com/user-attachments/assets/0d6deca0-0f49-4aa3-ab23-0cfbde4fa4e8"
+	},
+	{
 		"id": "sticky-conversation-list-toolbar",
 		"description": "Makes the issue/PR list’s filters toolbar sticky.",
 		"css": true,
+		"cssOnly": true,
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/261164103-875b70f7-5adc-4bb2-b158-8d5231d47da2.gif"
+	},
+	{
+		"id": "sticky-csv-header",
+		"description": "Makes the first column of CSV/TSV file previews sticky while scrolling horizontally.",
+		"css": true,
+		"cssOnly": true,
+		"screenshot": null
+	},
+	{
+		"id": "sticky-file-header",
+		"description": "Makes the file header sticky when scrolling through code diffs.",
+		"css": true,
+		"cssOnly": true,
+		"screenshot": null
 	},
 	{
 		"id": "sticky-notifications-actions",
 		"description": "Make the notifications action bar sticky.",
 		"css": true,
+		"cssOnly": true,
 		"screenshot": "https://github.com/refined-github/refined-github/assets/1402241/5b370430-2319-4c78-88e7-c2c06cd1c30f"
 	},
 	{
@@ -885,6 +979,13 @@
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/140871606/257011579-25332762-b25f-407b-b6d2-bbfc13de2be7.png"
 	},
 	{
+		"id": "tab-size",
+		"description": "Reduces the default tab indent width from 8 to 4 characters in code views where GitHub doesn't follow the user's preferences.",
+		"css": true,
+		"cssOnly": true,
+		"screenshot": null
+	},
+	{
 		"id": "tab-to-indent",
 		"description": "Enables <kbd>tab</kbd> and <kbd>shift</kbd> <kbd>tab</kbd> for indentation in comment fields.",
 		"screenshot": "https://user-images.githubusercontent.com/1402241/33802977-beb8497c-ddbf-11e7-899c-698d89298de4.gif"
@@ -912,14 +1013,21 @@
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/253063446-6f556e7d-2ac5-439d-92f0-0c6d719fc86f.gif"
 	},
 	{
+		"id": "unclip-checks",
+		"description": "Automatically shows all checks without scrolling when expanding the checks panel.",
+		"css": true,
+		"screenshot": "https://github.com/user-attachments/assets/785fffab-43e8-4f79-8170-7c264111df9f"
+	},
+	{
 		"id": "unfinished-comments",
 		"description": "Notifies the user of unfinished comments in hidden tabs.",
 		"screenshot": "https://user-images.githubusercontent.com/1402241/97792086-423d5d80-1b9f-11eb-9a3a-daf716d10b0e.gif"
 	},
 	{
 		"id": "unread-anywhere",
-		"description": "Adds a global shortcut to open all your unread notifications at once: <kbd>g</kbd> <kbd>u</kbd>",
-		"screenshot": "https://github.com/user-attachments/assets/3afb7e86-66e8-4b26-a5c0-9c93fb5d8141"
+		"description": "Adds a button to the global header to open your unread notifications from any page.",
+		"css": true,
+		"screenshot": "https://github.com/user-attachments/assets/978ac1fe-db98-40f9-9b56-7d289849aa2f"
 	},
 	{
 		"id": "unreleased-commits",
@@ -927,25 +1035,16 @@
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/1402241/267236196-8564c193-a3c7-4248-9735-54749c1990c7.png"
 	},
 	{
-		"id": "unwrap-unnecessary-dropdowns",
-		"description": "Makes some dropdowns 1-click instead of unnecessarily 2-click.",
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/83146190/258554504-97d4079a-2aae-4aea-a870-653a267494a8.png"
-	},
-	{
 		"id": "update-pr-from-base-branch",
-		"description": "Adds an \"Update branch\" button to every PR. GitHub has the same feature, but it must be manually configured with protected branches.",
-		"screenshot": "https://user-images.githubusercontent.com/1402241/234483592-4867cb2e-21cb-436d-9ea0-aedadf834f19.png"
+		"description": "Adds an \"Update branch | Rebase\" button to every PR. GitHub has the same feature, but it must be manually configured for each repo.",
+		"css": true,
+		"screenshot": "https://github.com/user-attachments/assets/7bd2745b-c57c-4c26-bbb8-b05e9cf089db"
 	},
 	{
 		"id": "useful-not-found-page",
 		"description": "Adds possible related pages and alternatives on 404 pages.",
-		"screenshot": "https://user-images.githubusercontent.com/1402241/46402857-7bdada80-c733-11e8-91a1-856573078ff5.png"
-	},
-	{
-		"id": "user-local-time",
-		"description": "Shows the user local time in their hovercard (based on their last commit).",
 		"css": true,
-		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/140871606/257039621-132bd789-e213-4a89-83ff-e1266215c60d.png"
+		"screenshot": "https://user-images.githubusercontent.com/1402241/46402857-7bdada80-c733-11e8-91a1-856573078ff5.png"
 	},
 	{
 		"id": "user-profile-follower-badge",
@@ -953,15 +1052,9 @@
 		"screenshot": "https://github-production-user-asset-6210df.s3.amazonaws.com/1402241/263206287-c8e1b94c-ec80-4394-bbb3-1cf6fb08b807.png"
 	},
 	{
-		"id": "vertical-front-matter",
-		"description": "Shows Markdown front matter as vertical table.",
-		"css": true,
-		"screenshot": "https://user-images.githubusercontent.com/44045911/87251695-26069b00-c4a0-11ea-9077-53ce366490ed.png"
-	},
-	{
 		"id": "view-last-pr-deployment",
-		"description": "Adds a link to open the latest deployment from the header of a PR.",
-		"screenshot": "https://user-images.githubusercontent.com/44045911/232313171-b54ac9cc-ebb1-43ef-bd41-5d81ec9f9588.png"
+		"description": "Adds a link to open the latest deployment to the PR header.",
+		"screenshot": "https://github.com/user-attachments/assets/90d2498d-ef65-45b9-96eb-07e7988bea61"
 	},
 	{
 		"id": "visit-tag",

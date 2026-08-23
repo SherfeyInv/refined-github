@@ -17,21 +17,21 @@ export default function showWhiteSpacesOnLine(line: Element, shouldAvoidSurround
 		const isTrailing = nodeIndex === textNodesOnThisLine.length - 1;
 
 		const startingCharacterIndex = shouldAvoidSurroundingSpaces && isLeading ? 1 : 0;
-		const skipLastCharacter = shouldAvoidSurroundingSpaces && isTrailing;
-		const endingCharacterIndex = text.length - 1 - Number(skipLastCharacter);
+		const shouldSkipLastCharacter = shouldAvoidSurroundingSpaces && isTrailing;
+		const endingCharacterIndex = text.length - 1 - Number(shouldSkipLastCharacter);
 
 		// Loop goes in reverse otherwise `splitText`'s `index` parameter needs to keep track of the previous split
 		for (let index = endingCharacterIndex; index >= startingCharacterIndex; index--) {
 			const thisCharacter = text[index];
-			const endingIndex = index;
 
 			// Exclude irrelevant characters
 			if (thisCharacter !== ' ' && thisCharacter !== '\t') {
 				continue;
 			}
 
+			const endingIndex = index;
 			// Find the same character so they can be wrapped together, but stop at `startingCharacterIndex`
-			while (text[index - 1] === thisCharacter && !(index === startingCharacterIndex)) {
+			while (index !== startingCharacterIndex && text[index - 1] === thisCharacter) {
 				index--;
 			}
 

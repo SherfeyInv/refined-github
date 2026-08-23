@@ -5,8 +5,11 @@ import * as pageDetect from 'github-url-detection';
 
 import features from '../feature-manager.js';
 import onCommitTitleUpdate from '../github-events/on-commit-title-update.js';
+import waitForPrMerge from '../github-events/on-pr-merge.js';
 import getNextConversationNumber from '../github-helpers/get-next-conversation-number.js';
 import {getConversationNumber} from '../github-helpers/index.js';
+import abortableClassName from '../helpers/abortable-classname.js';
+import observe from '../helpers/selector-observer.js';
 import {formatPrCommitTitle} from './sync-pr-commit-title.js';
 
 // https://github.com/refined-github/refined-github/issues/2178#issuecomment-505940703
@@ -16,7 +19,7 @@ function validateCommitTitle({delegateTarget: field}: DelegateEvent<Event, HTMLI
 	field.classList.toggle('rgh-title-over-limit', field.value.length > limit);
 }
 
-async function validatePrTitle({delegateTarget: field}: DelegateEvent<Event, HTMLInputElement>): Promise<void> {
+async function validatePrTitle(field: HTMLInputElement): Promise<void> {
 	// Include the PR number in the title length calculation because it will be added to the commit title
 	const prTitle = formatPrCommitTitle(
 		field.value,
@@ -25,13 +28,38 @@ async function validatePrTitle({delegateTarget: field}: DelegateEvent<Event, HTM
 	field.classList.toggle('rgh-title-over-limit', prTitle.length > limit);
 }
 
-function init(signal: AbortSignal): void {
-	document.body.classList.add('rgh-suggest-commit-title-limit');
+async function validatePrTitleDelegate({delegateTarget}: DelegateEvent<Event, HTMLInputElement>): Promise<void> {
+	await validatePrTitle(delegateTarget);
+}
+
+const currentPrTitleSelectors = [
+	'[class^="prc-PageLayout-Header"] input', // `isPR`
+	'input[name="pull_request[title]"]', // `isCompare`
+];
+
+async function init(signal: AbortSignal): Promise<void> {
+	abortableClassName(document.body, signal, 'rgh-suggest-commit-title-limit');
+
 	onCommitTitleUpdate(validateCommitTitle, signal);
-	delegate([
-		'#issue_title',
-		'#pull_request_title',
-	], 'input', validatePrTitle, {signal, passive: true});
+
+	delegate(
+		[
+			...currentPrTitleSelectors,
+			'input#pull_request_title',
+			// Old `isCompare`
+			// TODO [2026-09-01]: Remove
+			'input#issue_title', // Old `isPR` view - TODO: Remove after legacy PR files view is removed
+		],
+		'input',
+		validatePrTitleDelegate,
+		{signal, passive: true},
+	);
+	// `isPR` - input is added to the DOM when user enters editing mode and removed when they exit it
+	// `isCompare` - input is re-rendered when previously entered title is restored
+	observe(currentPrTitleSelectors, validatePrTitle, {signal});
+
+	await waitForPrMerge(signal);
+	features.unload(import.meta.url);
 }
 
 void features.add(import.meta.url, {
@@ -40,6 +68,12 @@ void features.add(import.meta.url, {
 		pageDetect.isCompare,
 		pageDetect.isPR,
 	],
+	exclude: [
+		// No need here https://github.com/refined-github/refined-github/issues/7922
+		pageDetect.isMergedPR,
+	],
+	// DOM-based checks; event-based feature
+	awaitDomReady: true,
 	init,
 });
 
@@ -58,5 +92,7 @@ void features.add(import.meta.url, {
 - Any editable file
 	- Markown: https://github.com/refined-github/refined-github/edit/main/readme.md
 	- Workflow: https://github.com/refined-github/refined-github/edit/fix-commit-title-limit/.github/workflows/features.yml
+- Compare page
+	- https://github.com/refined-github/sandbox/compare/default-a...fregante-patch-2?expand=1
 
 */

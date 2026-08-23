@@ -1,22 +1,23 @@
-import * as pageDetect from 'github-url-detection';
 import delegate, {type DelegateEvent} from 'delegate-it';
 import filterAlteredClicks from 'filter-altered-clicks';
+import * as pageDetect from 'github-url-detection';
 
 import features from '../feature-manager.js';
 
-function openInNewTab(event: DelegateEvent<MouseEvent, HTMLAnchorElement>): void {
+export const openInNewTab = filterAlteredClicks((event: DelegateEvent<MouseEvent, HTMLAnchorElement>) => {
 	event.preventDefault();
 	window.open(event.delegateTarget.href, '_blank');
-}
+});
 
 function init(signal: AbortSignal): void {
 	delegate(
 		[
-			'.js-preview-body a', // `hasRichTextEditor`
+			// Ignore self-reference links: https://github.com/refined-github/refined-github/pull/8854#issuecomment-3794351054
+			'.js-preview-body a[href]', // `hasRichTextEditor`
 			'.html-blob a', // `isEditingFile`
 		],
 		'click',
-		filterAlteredClicks(openInNewTab),
+		openInNewTab,
 		{signal},
 	);
 }

@@ -1,131 +1,62 @@
+import {mount, type ComponentProps} from 'svelte';
 import React from 'dom-chef';
+import {$, $$optional} from 'select-dom';
 import {CachedFunction} from 'webext-storage-cache';
-import {$$} from 'select-dom';
-import {$} from 'select-dom/strict.js';
-
-import TagIcon from 'octicons-plain-react/Tag';
 import * as pageDetect from 'github-url-detection';
-import InfoIcon from 'octicons-plain-react/Info';
 
 import features from '../feature-manager.js';
-import fetchDom from '../helpers/fetch-dom.js';
-import onPrMerge from '../github-events/on-pr-merge.js';
-import createBanner from '../github-helpers/banner.js';
-import TimelineItem from '../github-helpers/timeline-item.js';
-import attachElement from '../helpers/attach-element.js';
-import {buildRepoURL, getRepo, isRefinedGitHubRepo} from '../github-helpers/index.js';
-import {getReleases} from './releases-tab.js';
-import observe from '../helpers/selector-observer.js';
+import waitForPrMerge from '../github-events/on-pr-merge.js';
 import {userHasPushAccess} from '../github-helpers/get-user-permission.js';
-
-function excludeNightliesAndJunk({textContent}: HTMLAnchorElement): boolean {
-	// https://github.com/refined-github/refined-github/issues/7206
-	return !textContent.includes('nightly') && /\d[.]\d/.test(textContent);
-}
-
-function ExplanationLink(): JSX.Element {
-	// If you tweak this the alignment value, verify it against both the tagged and untagged states
-	// See screenshots in https://github.com/refined-github/refined-github/pull/7498
-	return (
-		<a href="https://github.com/refined-github/refined-github/wiki/Extended-feature-descriptions#closing-remarks">
-			<InfoIcon width={12} height={12} style={{verticalAlign: '-2px'}} />
-		</a>
-	);
-}
+import {buildRepoUrl, getRepo} from '../github-helpers/index.js';
+import fetchDom from '../helpers/fetch-dom.js';
+import observe from '../helpers/selector-observer.js';
+import ClosingRemarks from './closing-remarks.svelte';
+import HeaderTag from '../components/closing-remarks-header-tag.svelte';
 
 const firstTag = new CachedFunction('first-tag', {
 	async updater(commit: string): Promise<string | false> {
-		const tagsAndBranches = await fetchDom(buildRepoURL('branch_commits', commit));
-		const tags = $$('ul.branches-tag-list a', tagsAndBranches);
-		// eslint-disable-next-line unicorn/no-array-callback-reference -- Just this once, I swear
-		return tags.findLast(excludeNightliesAndJunk)?.textContent ?? false;
+		const tagsAndBranches = await fetchDom(buildRepoUrl('branch_commits', commit));
+		const tags = $$optional('ul.branches-tag-list a', tagsAndBranches);
+		// Prefer versioned tags https://github.com/refined-github/refined-github/issues/7206
+		const tag = tags.findLast(({textContent}) =>
+			!textContent.includes('nightly') && /\d[.]\d/.test(textContent),
+		)
+
+		// But still select any tag if no versioned tags are found
+		// https://github.com/refined-github/refined-github/issues/9831
+		?? tags.at(-1);
+
+		// No tags might be found at all
+		return tag?.textContent ?? false;
 	},
 	cacheKey: ([commit]) => [getRepo()!.nameWithOwner, commit].join(':'),
 });
 
-function createReleaseUrl(): string | undefined {
-	if (isRefinedGitHubRepo()) {
-		return 'https://github.com/refined-github/refined-github/actions/workflows/release.yml';
-	}
+function getMergeCommitHash(): string {
+	const mergeCommit = $(`.TimelineItem.js-details-container.Details a[href^="/${getRepo()!.nameWithOwner}/commit/" i]`);
+	return /commit\/(?<hash>[0-9a-f]{40})/.exec(mergeCommit.pathname)!.groups!.hash;
+}
 
-	return buildRepoURL('releases/new');
+function mountClosingRemarks(props: ComponentProps<typeof ClosingRemarks>, signal: AbortSignal): void {
+	const container = <div />;
+	mount(ClosingRemarks, {target: container, props});
+	observe('.js-discussion', anchor => {
+		anchor.after(container);
+	}, {signal});
 }
 
 async function init(signal: AbortSignal): Promise<void> {
-	const mergeCommit = $(`.TimelineItem.js-details-container.Details a[href^="/${getRepo()!.nameWithOwner}/commit/" i] > code`).textContent;
+	const mergeCommit = getMergeCommitHash();
 	const tagName = await firstTag.get(mergeCommit);
-
-	if (tagName) {
-		const tagUrl = buildRepoURL('releases/tag', tagName);
-
-		// Add static box at the bottom
-		addExistingTagLinkFooter(tagName, tagUrl);
-
-		// PRs have a regular and a sticky header
-		observe('#partial-discussion-header relative-time', addExistingTagLinkToHeader.bind(undefined, tagName, tagUrl), {signal});
-	} else {
-		void addReleaseBanner('This PR’s merge commit doesn’t appear in any tags');
-	}
-}
-
-function addExistingTagLinkToHeader(tagName: string, tagUrl: string, discussionHeader: HTMLElement): void {
-	discussionHeader.parentElement!.append(
-		<span>
-			<TagIcon className="ml-2 mr-1 color-fg-muted" />
-			<a
-				href={tagUrl}
-				className="commit-ref"
-				title={`${tagName} was the first Git tag to include this pull request`}
-			>
-				{tagName}
-			</a>
-		</span>,
-	);
-}
-
-function addExistingTagLinkFooter(tagName: string, tagUrl: string): void {
-	const linkedTag = <a href={tagUrl} className="Link--primary text-bold">{tagName}</a>;
-	attachElement($('#issue-comment-box'), {
-		before: () => (
-			<TimelineItem>
-				{createBanner({
-					icon: <TagIcon className="m-0" />,
-					text: <>This pull request first appeared in {linkedTag} <ExplanationLink /></>,
-					classes: ['flash-success', 'rgh-bg-none'],
-				})}
-			</TimelineItem>
-		),
-	});
-}
-
-async function addReleaseBanner(text = 'Now you can release this change'): Promise<void> {
-	const [releases] = await getReleases();
-	if (releases === 0) {
+	if (!tagName) {
+		mountClosingRemarks({mergeCommit}, signal);
 		return;
 	}
 
-	const url = createReleaseUrl();
-	const bannerContent = {
-		icon: <TagIcon className="m-0" />,
-		classes: ['rgh-bg-none'],
-		text: <>{text} <ExplanationLink /></>,
-	};
-
-	attachElement($('#issue-comment-box'), {
-		before: () => (
-			<TimelineItem>
-				{createBanner(
-					url
-						? {
-								...bannerContent,
-								action: url,
-								buttonLabel: 'Draft a new release',
-							}
-						: bannerContent,
-				)}
-			</TimelineItem>
-		),
-	});
+	mountClosingRemarks({tagName, mergeCommit}, signal);
+	observe('[class*="PullRequestHeaderSummary"] relative-time', relativeTime => {
+		mount(HeaderTag, {target: relativeTime.parentElement!, props: {tagName}});
+	}, {signal});
 }
 
 void features.add(import.meta.url, {
@@ -144,8 +75,9 @@ void features.add(import.meta.url, {
 		userHasPushAccess,
 	],
 	awaitDomReady: true, // Post-load user event, no need to listen earlier
-	init(signal: AbortSignal): void {
-		onPrMerge(addReleaseBanner, signal);
+	async init(signal: AbortSignal): Promise<void> {
+		await waitForPrMerge(signal);
+		mountClosingRemarks({postMerge: true}, signal);
 	},
 });
 
@@ -155,11 +87,10 @@ Test URLs
 - PR: https://github.com/refined-github/refined-github/pull/5600
 - Locked PR: https://github.com/eslint/eslint/pull/17
 - Archived repo: https://github.com/fregante/iphone-inline-video/pull/130
-- Junk tag: https://github.com/refined-github/sandbox/pull/1
-	- See: https://github.com/refined-github/sandbox/branch_commits/f743c334f6475021ef133591b587bc282c0cf4c4
-- Normal tag: https://togithub.com/refined-github/refined-github/pull/7127
-	- See https://github.com/refined-github/refined-github/branch_commits/5321825
-- Nightly tag: https://togithub.com/neovim/neovim/pull/22060
-	- see: https://github.com/neovim/neovim/branch_commits/27b81af
+- Untagged PR: https://github.com/mwmwmwmwmwmwmwmwmwmwmwwwmwmwmwmwmwmwmwm/closing-remarks/pull/3
+- Prefer versioned tag: https://github.com/mwmwmwmwmwmwmwmwmwmwmwwwmwmwmwmwmwmwmwm/closing-remarks/pull/1
+	- See: https://github.com/mwmwmwmwmwmwmwmwmwmwmwwwmwmwmwmwmwmwmwm/closing-remarks/branch_commits/60eb1e5ee0953c70e6fc6150dbeacd1cf20899be
+- Show nightly tag if alone: https://github.com/mwmwmwmwmwmwmwmwmwmwmwwwmwmwmwmwmwmwmwm/closing-remarks/pull/2
+	- See https://github.com/mwmwmwmwmwmwmwmwmwmwmwwwmwmwmwmwmwmwmwm/closing-remarks/branch_commits/7571f5312ab5db9c23aa11a7e40c5ec88624a11b
 
 */

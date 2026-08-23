@@ -1,149 +1,94 @@
 @media (width <= 767px) {
-	:root:root .AppHeader-localBar {
-		padding: 0;
-	}
-
-	:root .UnderlineNav {
-		padding-inline: var(--base-size-16, 16px);
-		padding-block: 5px var(--control-medium-gap, 8px);
-	}
-
-	:root .UnderlineNav-body {
-		align-items: stretch; /* Ensure they have the same height */
-	}
-
-	:root .UnderlineNav-item {
-		display: grid;
-		min-width: 50px;
-		grid:
-			'icon counter'
-			'title title';
-		gap: 0 5px;
-		padding: 6px 10px;
-		background: var(
-			--control-transparent-bgColor-hover,
-			var(--color-action-list-item-default-hover-bg, fuchsia)
-		);
-	}
-
-	:root .UnderlineNav-item:hover {
-		background: var(
-			--control-transparent-bgColor-hover,
-			var(--color-action-list-item-default-active-bg, fuchsia)
-		); /* From: Counter background color */
-	}
-
-	:root .UnderlineNav-item.selected::after {
-		/* Reposition the orange line */
-		bottom: -9px !important;
-	}
-
-	:root .UnderlineNav-item [data-content] {
-		grid-area: title;
-		line-height: 1;
-		margin-top: 5px;
-
-		/* font-size: 0; */
-		/* Safari 16.4 color bug #6473 */
-		font-size: 0.6px;
-		color: transparent !important;
-	}
-
-	:root .UnderlineNav-item [data-content]::before {
-		visibility: inherit;
-		height: auto;
-		font-size: 10px;
-		color: var(--fgColor-default, var(--color-fg-default, fuchsia));
-		font-weight: inherit;
-	}
-
-	:root [data-content='Pull requests']::before {
-		content: 'Pulls' !important;
-	}
-
-	/* Tab label on on profiles */
-	:root .UnderlineNav-item span[data-view-component]:not([class]) {
-		grid-area: title;
-		line-height: 1;
-		margin-top: 5px;
-		font-size: 10px;
-	}
-
-	:root .UnderlineNav-item svg {
-		margin: 0 !important;
-		grid-area: icon;
-		justify-self: end;
-	}
-
-	:root .UnderlineNav-item .Counter {
-		grid-area: counter;
-		background: none; /* Counters appears as pills */
-		padding: 0;
-		margin: 0;
-		border: none;
-		min-width: min-content;
-		justify-self: start;
-	}
-
-	/* When counter is missing */
-	:root .UnderlineNav-item:not(:has(.Counter)),
-	:root .UnderlineNav-item:has(.Counter:empty),
-	:root .UnderlineNav-item:has([hidden]) {
-		grid-template-areas:
-			'icon icon'
-			'title title';
-
-		svg {
-			justify-self: center;
-		}
-	}
-
-	/* PR tab navigation */
-	/* https://github.com/refined-github/refined-github/issues/7725 */
-	#partial-discussion-header + .tabnav .tabnav-tab {
-		display: inline-flex;
-		flex-wrap: wrap;
-		width: min-content;
-		white-space: nowrap;
-		place-content: center center;
-		align-items: center;
-		min-width: 7em;
-		padding: 0.7em;
-		font-size: 13px;
-
-		.octicon {
-			order: -2;
-			display: block !important;
+	:root {
+		.AppHeader-localBar {
+			padding: 0;
 		}
 
-		.Counter {
-			order: -1;
-		}
+		.UnderlineNav {
+			padding-inline: var(--base-size-16, 16px);
+			padding-block: 5px var(--control-medium-gap, 8px);
 
-		@media (width <= 500px) {
-			font-size: 10px;
+			.UnderlineNav-body {
+				align-items: stretch;
+			}
 
-			.Counter {
-				background: none;
-				padding: 0;
-				margin: 0;
-				min-width: 0;
+			.UnderlineNav-item {
+				display: grid;
+				min-width: 50px;
+				grid:
+					'icon counter'
+					'title title';
+				gap: 0 5px;
+				padding: 6px 10px;
+				background: var(
+					--control-transparent-bgColor-hover,
+					var(--color-action-list-item-default-hover-bg, fuchsia)
+				);
+
+				&:hover {
+					background: var(
+						--control-transparent-bgColor-hover,
+						var(--color-action-list-item-default-active-bg, fuchsia)
+					);
+				}
+
+				&.selected::after {
+					bottom: -9px !important;
+				}
+
+				&:not(:has(.Counter)),
+				&:has([hidden]) {
+					grid-template-areas:
+						'icon icon'
+						'title title';
+
+					& svg {
+						justify-self: center;
+					}
+				}
+
+				[data-content] {
+					display: block !important; /* Override `.d-none` if present */
+					grid-area: title;
+					line-height: 1;
+					margin-top: 5px;
+					font-size: 0.6px;
+					color: transparent !important;
+
+					&::before {
+						content: attr(data-content);
+						visibility: inherit;
+						height: auto;
+						font-size: 10px;
+						color: var(--fgColor-default, var(--color-fg-default, fuchsia));
+						font-weight: inherit;
+					}
+				}
+
+				svg {
+					margin: 0 !important;
+					grid-area: icon;
+					justify-self: end;
+				}
+
+				.Counter {
+					grid-area: counter;
+					background: none;
+					padding: 0;
+					margin: 0;
+					border: none;
+					min-width: min-content;
+					justify-self: start;
+				}
 			}
 		}
-	}
 
-	@media (width <= 500px) {
-		#partial-discussion-header + .tabnav {
-			font-size: 10px;
-
-			/* Avoid awkward clipped overflow */
-			padding-right: 0 !important;
-
-			.Counter {
-				background: none;
-				padding: 0;
-				margin: 0;
-			}
+		/* TODO: Move to svelte component instead? It can toggle between full and short `span`s */
+		[data-content='Pull requests']::before {
+			content: 'Pulls' !important;
+		}
+		[data-content='Security and quality']::before {
+			content: 'Security' !important;
 		}
 	}
 }

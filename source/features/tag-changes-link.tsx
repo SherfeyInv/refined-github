@@ -1,16 +1,17 @@
 import './tag-changes-link.css';
 
+import cx from 'clsx';
 import React from 'dom-chef';
-import {$$, elementExists} from 'select-dom';
-import {$, $optional} from 'select-dom/strict.js';
 import domLoaded from 'dom-loaded';
-import DiffIcon from 'octicons-plain-react/Diff';
 import * as pageDetect from 'github-url-detection';
+import DiffIcon from 'octicons-plain-react/Diff';
+import {$, $$, $optional, elementExists} from 'select-dom';
 import tinyVersionCompare from 'tiny-version-compare';
 
 import features from '../feature-manager.js';
+import {buildRepoUrl, getRepo, parseTag} from '../github-helpers/index.js';
 import fetchDom from '../helpers/fetch-dom.js';
-import {buildRepoURL, getRepo, parseTag} from '../github-helpers/index.js';
+import {withTooltipRef} from '../components/tooltip.js';
 
 type TagDetails = {
 	element: HTMLElement;
@@ -28,7 +29,7 @@ async function getNextPage(): Promise<DocumentFragment> {
 
 	if (pageDetect.isSingleReleaseOrTag()) {
 		const [, tag = ''] = getRepo()!.path.split('releases/tag/', 2); // Already URL-encoded
-		return fetchDom(buildRepoURL(`tags?after=${tag}`));
+		return fetchDom(buildRepoUrl(`tags?after=${tag}`));
 	}
 
 	return new DocumentFragment();
@@ -38,7 +39,7 @@ function parseTags(element: HTMLElement): TagDetails {
 	// DO NOT change this to `pathname` because it's empty when element is from `getNextPage` function
 	// https://github.com/refined-github/refined-github/pull/7726#discussion_r1727135015
 	const tagUrl = $(['a[href*="/tree/"]', 'a[href*="/tag/"]'], element).href;
-	const tag = /\/(?:releases\/tag|tree)\/(.*)/.exec(tagUrl)![1];
+	const {tag} = /\/(?:releases\/tag|tree)\/(?<tag>.*)/.exec(tagUrl)!.groups!;
 
 	return {
 		element,
@@ -67,7 +68,7 @@ function getPreviousTag(current: number, allTags: TagDetails[]): string | undefi
 		}
 
 		// If no matching namespace is found, just use the next one
-		unmatchedNamespaceTag ||= allTags[next].tag;
+		unmatchedNamespaceTag ??= allTags[next].tag;
 	}
 
 	return unmatchedNamespaceTag;
@@ -106,18 +107,25 @@ async function init(): Promise<void> {
 			const currentTag = allTags[index].tag;
 			const compareLink = (
 				<a
-					className="Link--muted tooltipped tooltipped-n"
-					aria-label={`See commits between ${decodeURIComponent(previousTag)} and ${decodeURIComponent(currentTag)}`}
-					href={buildRepoURL(`compare/${previousTag}...${currentTag}`)}
+					ref={withTooltipRef({
+						label: `See commits between ${decodeURIComponent(previousTag)} and ${decodeURIComponent(currentTag)}`,
+						direction: 'n',
+					})}
+					className="Link--muted"
+					href={buildRepoUrl(`compare/${previousTag}...${currentTag}`)}
 				>
-					<DiffIcon /> {pageDetect.isEnterprise() ? 'Commits' : <span className="ml-1 wb-break-all">Commits</span>}
+					<DiffIcon /> {pageDetect.isEnterprise() ? 'Commits' : <span className="ml-1 tmp-ml-1 wb-break-all">Commits</span>}
 				</a>
 			);
 
 			// The page of a tag without a release still uses the old layout #5037
-			if (pageDetect.isEnterprise() || pageDetect.isTags() || (pageDetect.isSingleReleaseOrTag() && elementExists('.release'))) {
+			if (
+				pageDetect.isEnterprise()
+				|| pageDetect.isTags()
+				|| (pageDetect.isSingleReleaseOrTag() && elementExists('.release'))
+			) {
 				lastLink.after(
-					<li className={lastLink.className + ' rgh-changelog-link'}>
+					<li className={cx(lastLink.className, 'rgh-changelog-link')}>
 						{compareLink}
 					</li>,
 				);
@@ -127,7 +135,14 @@ async function init(): Promise<void> {
 			}
 
 			lastLink.parentElement!.after(
-				<div className={'rgh-changelog-link ' + (pageDetect.isReleases() ? 'mb-md-2 mr-3 mr-md-0' : 'mr-4 mb-2')}>
+				<div
+					className={cx(
+						'rgh-changelog-link mr-4 tmp-mr-3',
+						pageDetect.isReleases()
+							? 'tmp-my-md-2 my-md-2 mr-md-0 tmp-mr-md-0'
+							: 'mb-2 tmp-mb-2',
+					)}
+				>
 					{compareLink}
 				</div>,
 			);

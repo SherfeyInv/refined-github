@@ -1,29 +1,28 @@
-import {$optional, $} from 'select-dom/strict.js';
-import {elementExists} from 'select-dom';
 import elementReady from 'element-ready';
-import compareVersions from 'tiny-version-compare';
-import type {RequireAtLeastOne} from 'type-fest';
 import * as pageDetect from 'github-url-detection';
 import mem from 'memoize';
+import {$, $optional, closestElement, closestElementOptional, elementExists} from 'select-dom';
+import compareVersions from 'tiny-version-compare';
+import {assert} from 'ts-extras';
+import type {RequireAtLeastOne} from 'type-fest';
 
-import onetime from '../helpers/onetime.js';
+import {is} from '../helpers/css-selectors.js';
+import getCommentAuthor from './get-comment-author.js';
 import {branchSelector} from './selectors.js';
 
-// This never changes, so it can be cached here
-export const getUsername = onetime(pageDetect.utils.getUsername);
-export const {getRepositoryInfo: getRepo, getCleanPathname} = pageDetect.utils;
+// Re-export for convenience
+export const {getRepositoryInfo: getRepo, getCleanPathname, getLoggedInUser} = pageDetect.utils;
 
 export function getConversationNumber(): number | undefined {
-	const [, _owner, _repo, type, prNumber] = location.pathname.split('/');
+	const [, _owner, _repo, type, prNumber] = location.pathname.split('/', 5);
 	return (type === 'pull' || type === 'issues') && Number(prNumber) ? Number(prNumber) : undefined;
 }
 
 export const isMac = navigator.userAgent.includes('Macintosh');
 
-type Not<Yes, Not> = Yes extends Not ? never : Yes;
-type UnslashedString<S extends string> = Not<S, `/${string}` | `${string}/`>;
-
-export function buildRepoURL<S extends string>(...pathParts: RequireAtLeastOne<Array<UnslashedString<S> | number>, 0>): string {
+export function buildRepoUrl<S extends string>(
+	...pathParts: RequireAtLeastOne<Array<UnslashedString<S> | number>, 0>
+): string {
 	for (const part of pathParts) {
 		if (typeof part === 'string' && /^\/|\/$/.test(part)) {
 			throw new TypeError('The path parts shouldn’t start or end with a slash: ' + part);
@@ -38,7 +37,7 @@ export function getForkedRepo(): string | undefined {
 }
 
 export function parseTag(tag: string): {version: string; namespace: string} {
-	const [, namespace = '', version = ''] = /(?:(.*)@)?([^@]+)/.exec(tag) ?? [];
+	const {namespace = '', version = ''} = /(?:(?<namespace>.*)@)?(?<version>[^@]+)/.exec(tag)?.groups ?? {};
 	return {namespace, version};
 }
 
@@ -49,19 +48,21 @@ export function isUsernameAlreadyFullName(username: string, realname: string): b
 		.toLowerCase();
 	realname = realname
 		.normalize('NFD')
-		.replaceAll(/\W/g, '')
+		// Remove diacritics, punctuation and spaces
+		// https://stackoverflow.com/a/37511463/288906
+		// https://www.freecodecamp.org/news/what-is-punct-in-regex-how-to-match-all-punctuation-marks-in-regular-expressions/
+		.replaceAll(/[\s\p{Diacritic}\p{Punctuation}]/gu, '')
 		.toLowerCase();
 
-	return username === realname || username.startsWith(realname);
+	return username === realname;
 }
 
-const validVersion = /^[vr]?\d+(?:\.\d+)+/;
-// eslint-disable-next-line regexp/no-useless-non-capturing-group -- I don't think so?
-const isPrerelease = /^[vr]?\d+(?:\.\d+)+(?:-\d)/;
+const validVersion = /^[rv]?\d+(?:\.\d+)+/;
+const isPrerelease = /^[rv]?\d+(?:\.\d+)+-\d/;
 export function getLatestVersionTag(tags: string[]): string {
 	// Some tags aren't valid versions; comparison is meaningless.
 	// Just use the latest tag returned by the API (reverse chronologically-sorted list)
-	if (!tags.every(tag => validVersion.test(tag))) {
+	if (tags.some(tag => !validVersion.test(tag))) {
 		return tags[0];
 	}
 
@@ -93,7 +94,7 @@ const cachePerPage = {
 /** Is tag or commit, with elementReady */
 export const isPermalink = mem(async () => {
 	// No need for getCurrentGitRef(), it's a simple and exact check
-	if (/^[\da-f]{40}$/.test(location.pathname.split('/')[4])) {
+	if (/^[\da-f]{40}$/.test(location.pathname.split('/', 5)[4])) {
 		// It's a commit
 		return true;
 	}
@@ -125,16 +126,33 @@ export async function isArchivedRepoAsync(): Promise<boolean> {
 	return pageDetect.isArchivedRepo();
 }
 
-export const userCanLikelyMergePR = (): boolean => elementExists('.discussion-sidebar-item .octicon-lock');
+export const userCanLikelyMergePr = (): boolean => elementExists('.discussion-sidebar-item .octicon-lock');
+
+const navigationBarSelector = is(
+	'.GlobalNav',
+	// Remove after June 2026
+	'.js-repo-nav',
+);
+
+export function areIssuesEnabled(): boolean {
+	const repo = getRepo()!;
+	return elementExists(`${navigationBarSelector} a[href^="/${repo.nameWithOwner}/issues"]`);
+}
+
+export function areDiscussionsEnabled(): boolean {
+	const repo = getRepo()!;
+	return elementExists(`${navigationBarSelector} a[href^="/${repo.nameWithOwner}/discussions"]`);
+}
 
 export const cacheByRepo = (): string => getRepo()!.nameWithOwner;
 
 // Commit lists for files and folders lack a branch selector
-export const isRepoCommitListRoot = (): boolean => pageDetect.isRepoCommitList() && document.title.startsWith('Commits');
+export const isRepoCommitListRoot = (): boolean =>
+	pageDetect.isRepoCommitList() && document.title.startsWith('Commits');
 
 export const isUrlReachable = mem(async (url: string): Promise<boolean> => {
-	const {ok} = await fetch(url, {method: 'head'});
-	return ok;
+	const {ok: isOk} = await fetch(url, {method: 'head'});
+	return isOk;
 });
 
 // Don't make the argument optional, sometimes we really expect it to exist and want to throw an error
@@ -145,7 +163,7 @@ export function extractCurrentBranchFromBranchPicker(branchPicker: HTMLElement):
 }
 
 export function addAfterBranchSelector(branchSelectorParent: HTMLDetailsElement, sibling: HTMLElement): void {
-	const row = branchSelectorParent.closest('.position-relative')!;
+	const row = closestElement('.position-relative', branchSelectorParent);
 	row.classList.add('d-flex', 'flex-shrink-0', 'gap-2');
 	row.append(sibling);
 }
@@ -154,28 +172,18 @@ export function addAfterBranchSelector(branchSelectorParent: HTMLDetailsElement,
 // https://github.com/refined-github/refined-github/issues/2465#issuecomment-567173300
 export function triggerConversationUpdate(): void {
 	const marker = $('.js-timeline-marker');
-	marker.dispatchEvent(new CustomEvent('socket:message', {
-		bubbles: true,
-		detail: {data: {gid: marker.dataset.gid}},
-	}));
+	marker.dispatchEvent(
+		new CustomEvent('socket:message', {
+			bubbles: true,
+			detail: {data: {gid: marker.dataset.gid}},
+		}),
+	);
 }
 
 // Fix z-index issue https://github.com/refined-github/refined-github/pull/7430
 export function fixFileHeaderOverlap(child: Element): void {
 	// In the sidebar the container is not present and this fix is not needed
-	child.closest('.container')?.classList.add('rgh-z-index-5');
-}
-
-/** Trigger a reflow to push the right-most tab into the overflow dropdown */
-export function triggerRepoNavOverflow(): void {
-	globalThis.dispatchEvent(new Event('resize'));
-}
-
-export function triggerActionBarOverflow(child: Element): void {
-	const parent = child.closest('action-bar')!;
-	const placeholder = document.createElement('div');
-	parent.replaceWith(placeholder);
-	placeholder.replaceWith(parent);
+	closestElementOptional('.container', child)?.classList.add('rgh-z-index-5');
 }
 
 export function multilineAriaLabel(...lines: string[]): string {
@@ -183,16 +191,31 @@ export function multilineAriaLabel(...lines: string[]): string {
 }
 
 export function scrollIntoViewIfNeeded(element: Element): void {
-	// @ts-expect-error No Firefox support https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollIntoViewIfNeeded
+	// @ts-expect-error No Firefox support https://developer.mozilla.org/docs/Web/API/Element/scrollIntoViewIfNeeded
 	(element.scrollIntoViewIfNeeded ?? element.scrollIntoView).call(element);
 }
 
-function getConversationAuthor(): string | undefined {
-	return $optional('#partial-discussion-header .gh-header-meta .author')?.textContent;
+export function getConversationBody(): Element {
+	return $([
+		'.react-issue-body', // Issues
+		'.js-command-palette-pull-body', // PRs
+	]);
+}
+
+// Issues don't include the author in the title. PRs don't have a "conversation body" on the Files tab.
+const prTitleExtractionRegex = /\bby (?<author>[^·]+?) · Pull Request #\d+ · [^/\\]+\/[^/\\]+$/;
+export function getConversationAuthor(): string {
+	if (pageDetect.isPR()) {
+		const match = prTitleExtractionRegex.exec(document.title);
+		assert(match, `Failed to extract PR author from title: ${document.title}`);
+		return match.groups!.author;
+	}
+
+	return getCommentAuthor(getConversationBody());
 }
 
 export function isOwnConversation(): boolean {
-	return getConversationAuthor() === getUsername();
+	return getConversationAuthor() === getLoggedInUser();
 }
 
 export function assertCommitHash(hash: string): void {

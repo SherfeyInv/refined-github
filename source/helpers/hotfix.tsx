@@ -1,92 +1,65 @@
-import React from 'dom-chef';
-import {CachedFunction} from 'webext-storage-cache';
-import {isEnterprise} from 'github-url-detection';
-import compareVersions from 'tiny-version-compare';
 import {any as concatenateTemplateLiteralTag} from 'code-tag';
-import {base64ToString} from 'uint8array-extras';
+import React from 'dom-chef';
+import {isEnterprise} from 'github-url-detection';
+import {CachedFunction} from 'webext-storage-cache';
 
-import type {RGHOptions} from '../options-storage.js';
+import type {RghOptions} from '../options-storage.js';
+import {getNewFeatureName} from '../feature-data.js';
 import isDevelopmentVersion from './is-development-version.js';
+import {webextFetch} from './isomorphic-fetch.js';
+import {type BrokenFeatureEntry, parseBrokenFeaturesCsv} from './hotfix-parse.js';
 
 const {version: currentVersion} = chrome.runtime.getManifest();
 
-function parseCsv(content: string): string[][] {
-	const lines = [];
-	const [_header, ...rawLines] = content.trim().split('\n');
-	for (const line of rawLines) {
-		if (line.trim()) {
-			lines.push(line.split(',').map(cell => cell.trim()));
-		}
-	}
-
-	return lines;
-}
-
 async function fetchHotfix(path: string): Promise<string> {
-	// The explicit endpoint is necessary because it shouldn't change on GHE
-	// We can't use `https://raw.githubusercontent.com` because of permission issues https://github.com/refined-github/refined-github/pull/3530#issuecomment-691595925
-	const request = await fetch(`https://api.github.com/repos/refined-github/yolo/contents/${path}`);
-	const {content} = await request.json();
-
-	// Rate-limit check
-	if (content) {
-		return base64ToString(content).trim();
-	}
-
-	return '';
+	// Use GitHub Pages host because the API is rate-limited
+	return webextFetch(`https://refined-github.github.io/yolo/${path}`, {
+		cache: 'no-store', // Disable caching altogether
+	});
 }
 
-type HotfixStorage = Array<[FeatureID, string, string]>;
+type HotfixStorage = BrokenFeatureEntry[];
 
 export const brokenFeatures = new CachedFunction('broken-features', {
 	async updater(): Promise<HotfixStorage> {
-		const content = await fetchHotfix('broken-features.csv');
-		if (!content) {
+	// To facilitate debugging, ignore hotfixes during development.
+	// Change the version in manifest.json to test hotfixes
+		if (isDevelopmentVersion()) {
 			return [];
 		}
 
-		const storage: HotfixStorage = [];
-		for (const [featureID, relatedIssue, unaffectedVersion] of parseCsv(content)) {
-			if (featureID && relatedIssue && (!unaffectedVersion || compareVersions(unaffectedVersion, currentVersion) > 0)) {
-				storage.push([featureID as FeatureID, relatedIssue, unaffectedVersion]);
-			}
-		}
-
-		return storage;
+		const content = await fetchHotfix('broken-features.csv');
+		return parseBrokenFeaturesCsv(content, currentVersion);
 	},
 	maxAge: {hours: 6},
 	staleWhileRevalidate: {days: 30},
 });
 
 export const styleHotfixes = new CachedFunction('style-hotfixes', {
-	updater: async (version: string): Promise<string> => fetchHotfix(`style/${version}.css`),
+	// To facilitate debugging, ignore hotfixes during development.
+	// Change the version in manifest.json to test hotfixes
+	updater: async (version: string): Promise<string> =>
+		isDevelopmentVersion() ? '' : fetchHotfix(`style/${version}.css`),
 
 	maxAge: {hours: 6},
 	staleWhileRevalidate: {days: 300},
 	cacheKey: () => '',
 });
 
-export async function getLocalHotfixes(): Promise<HotfixStorage> {
-	// To facilitate debugging, ignore hotfixes during development.
-	// Change the version in manifest.json to test hotfixes
-	if (isDevelopmentVersion()) {
-		return [];
-	}
-
-	return await brokenFeatures.get() ?? [];
-}
-
-export async function getLocalHotfixesAsOptions(): Promise<Partial<RGHOptions>> {
-	const options: Partial<RGHOptions> = {};
-	for (const [feature] of await getLocalHotfixes()) {
-		options[`feature:${feature}`] = false;
+export function brokenFeaturesAsOptions(brokenFeaturesStorage: HotfixStorage = []): Partial<RghOptions> {
+	const options: Partial<RghOptions> = {};
+	for (const [feature] of brokenFeaturesStorage) {
+		const currentFeature = getNewFeatureName(feature);
+		if (currentFeature) {
+			options[`feature:${currentFeature}`] = false;
+		}
 	}
 
 	return options;
 }
 
 export async function applyStyleHotfixes(style: string): Promise<void> {
-	if (isDevelopmentVersion() || isEnterprise() || !style) {
+	if (!style || isEnterprise()) {
 		return;
 	}
 

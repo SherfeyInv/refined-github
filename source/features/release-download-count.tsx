@@ -6,18 +6,19 @@ This feature is documented at https://github.com/refined-github/refined-github/w
 
 import './release-download-count.css';
 
+import cx from 'clsx';
 import React from 'dom-chef';
-import {$$} from 'select-dom';
-import DownloadIcon from 'octicons-plain-react/Download';
 import * as pageDetect from 'github-url-detection';
 import {abbreviateNumber} from 'js-abbreviation-number';
+import DownloadIcon from 'octicons-plain-react/Download';
+import {$, $$, $optional, closestElement, closestElementOptional} from 'select-dom';
 
-import getReleaseDownloadCount from './release-download-count.gql';
 import features from '../feature-manager.js';
 import api from '../github-helpers/api.js';
-import observe from '../helpers/selector-observer.js';
+import {assertNodeContent, getClasses} from '../helpers/dom-utils.js';
 import {createHeatIndexFunction} from '../helpers/math.js';
-import {expectToken} from '../github-helpers/github-token.js';
+import observe from '../helpers/selector-observer.js';
+import getReleaseDownloadCount from './release-download-count.gql';
 
 type Asset = {
 	name: string;
@@ -27,17 +28,16 @@ type Asset = {
 async function getAssetsForTag(tag: string): Promise<Record<string, number>> {
 	const {repository} = await api.v4(getReleaseDownloadCount, {variables: {tag}});
 	const assets: Asset[] = repository.release.releaseAssets.nodes;
-	return Object.fromEntries(assets.map(({name, downloadCount}) => ([name, downloadCount])));
+	return Object.fromEntries(assets.map(({name, downloadCount}) => [name, downloadCount]));
 }
 
 async function addCounts(assetsList: HTMLElement): Promise<void> {
 	// Both pages have .Box but in the list .Box doesn't include the tag
-	const container = assetsList.closest('section') // Single-release page
-		?? assetsList.closest('.Box:not(.Box--condensed)')!; // Releases list, excludes the assets list’s own .Box
+	const container = closestElementOptional('section', assetsList) // Single-release page
+		?? closestElement('.Box:not(.Box--condensed)', assetsList); // Releases list, excludes the assets list’s own .Box
 
-	const releaseName = container
-		// .octicon-code required by visit-tag feature
-		.querySelector(['.octicon-tag ~ span', '.octicon-code ~ span'])!
+	// .octicon-code required by visit-tag feature
+	const releaseName = $(['.octicon-tag ~ span', '.octicon-code ~ span'], container)
 		.textContent
 		.trim();
 
@@ -48,21 +48,30 @@ async function addCounts(assetsList: HTMLElement): Promise<void> {
 		// Match the asset in the DOM to the asset in the API response
 		const downloadCount = assets[assetLink.pathname.split('/').pop()!] ?? 0;
 
-		// Place next to asset size
-		const assetSize = assetLink
-			.closest('.Box-row')!
-			.querySelector(':scope > .flex-justify-end > :first-child')!;
+		// Avoid overflow/overlap
+		const row = closestElement('.Box-row', assetLink);
+		row.classList.add('flex-wrap');
+
+		// Re-align the asset size
+		const assetSize = $(
+			':scope > .flex-justify-end > span:has(+ span relative-time)',
+			row,
+		);
+		assertNodeContent(assetSize.firstChild, /^\d+(?:\.\d+)? \w{2,5}$/);
 
 		assetSize.classList.replace('text-sm-left', 'text-md-right');
-		assetSize.parentElement!.classList.add('rgh-release-download-count');
 
-		const classes = new Set(assetSize.classList);
+		const classes = getClasses(assetSize);
 		if (downloadCount === 0) {
+			// Don't show, but preserve space/column
 			classes.add('v-hidden');
 		}
 
-		assetSize.before(
-			<span className={[...classes].join(' ')}>
+		// Add class to parent in order to define "columns"
+		assetSize.parentElement!.classList.add('rgh-release-download-count', 'gap-4');
+
+		const widget = (
+			<span className={cx(getClasses(assetSize))}>
 				<span
 					className="d-inline-block text-right"
 					title={`${downloadCount} downloads`}
@@ -70,14 +79,28 @@ async function addCounts(assetsList: HTMLElement): Promise<void> {
 				>
 					{abbreviateNumber(downloadCount)} <DownloadIcon />
 				</span>
-			</span>,
+			</span>
 		);
+
+		const nativeCount = $optional('span[aria-label*="download"]', assetSize.parentElement!);
+		// The native counter doesn't have heat colors, so we replace it anyway.
+		// https://github.com/refined-github/refined-github/issues/9769#issuecomment-4857658434
+		if (nativeCount) {
+			nativeCount.replaceWith(widget);
+		} else {
+			// Add at the beginning of the line to avoid content shift
+			assetSize.parentElement!.prepend(widget);
+		}
+
+		// Unset all margin we added `gap` like sane people.
+		// Unset via JS because we can't override utility classes.
+		for (const column of assetSize.parentElement!.children) {
+			(column as HTMLElement).style.setProperty('margin', '0', 'important');
+		}
 	}
 }
 
 async function init(signal: AbortSignal): Promise<void> {
-	await expectToken();
-
 	observe('.Box-footer .Box--condensed:has(.octicon-package)', addCounts, {signal});
 }
 
@@ -86,6 +109,7 @@ void features.add(import.meta.url, {
 		pageDetect.isReleasesOrTags,
 		pageDetect.isSingleReleaseOrTag,
 	],
+	requiresToken: true,
 	init,
 });
 
@@ -93,8 +117,9 @@ void features.add(import.meta.url, {
 
 Test URLs
 
-- One release: https://github.com/cli/cli/releases/tag/v2.30.0
+- One release: https://github.com/refined-github/sandbox/releases/tag/v1.0.0
 - List of releases: https://github.com/cli/cli/releases
 - Lots of assets: https://github.com/notepad-plus-plus/notepad-plus-plus/releases
+- Assets without hashes: https://github.com/NateShoffner/Disable-Nvidia-Telemetry/releases/tag/1.1
 
 */

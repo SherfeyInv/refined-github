@@ -1,20 +1,20 @@
-import {CachedFunction} from 'webext-storage-cache';
-import {$, $optional} from 'select-dom/strict.js';
-import {elementExists} from 'select-dom';
 import elementReady from 'element-ready';
 import * as pageDetect from 'github-url-detection';
+import {$optional, elementExists} from 'select-dom';
+import {CachedFunction} from 'webext-storage-cache';
 
 import features from '../feature-manager.js';
-import {cacheByRepo} from '../github-helpers/index.js';
-import HasAnyProjects from './clean-conversation-filters.gql';
 import api from '../github-helpers/api.js';
-import {expectToken, expectTokenScope} from '../github-helpers/github-token.js';
+import {expectTokenScope} from '../github-helpers/github-token.js';
+import {cacheByRepo} from '../github-helpers/index.js';
+import looseParseInt from '../helpers/loose-parse-int.js';
 import observe from '../helpers/selector-observer.js';
+import HasAnyProjects from './clean-conversation-filters.gql';
 
 const hasAnyProjects = new CachedFunction('has-projects', {
 	async updater(): Promise<boolean> {
 		const activeProjectsCounter = await elementReady('[data-hotkey="g b"] .Counter');
-		if (activeProjectsCounter && getCount(activeProjectsCounter) > 0) {
+		if (looseParseInt(activeProjectsCounter) > 0) {
 			return true;
 		}
 
@@ -30,9 +30,8 @@ const hasAnyProjects = new CachedFunction('has-projects', {
 			allowErrors: true,
 		});
 
-		return Boolean(repository.projects.totalCount)
-			|| Boolean(repository.projectsV2.totalCount)
-			|| Boolean(organization?.projects?.totalCount)
+		return Boolean(repository.projectsV2.totalCount)
+			// Joint query, both org and projects are optional
 			|| Boolean(organization?.projectsV2?.totalCount);
 	},
 	maxAge: {days: 1},
@@ -40,24 +39,8 @@ const hasAnyProjects = new CachedFunction('has-projects', {
 	cacheKey: cacheByRepo,
 });
 
-function getCount(element: HTMLElement): number {
-	return Number(element.textContent.trim());
-}
-
-// TODO: Drop in March 2025
-// The new beta view doesn't have .Counter and using the API isn't worth it
-async function hideMilestones(container: HTMLElement): Promise<void> {
-	const milestones = $optional('[data-selected-links^="repo_milestones"] .Counter');
-	if (milestones && getCount(milestones) === 0) {
-		$('#milestones-select-menu', container).remove();
-	}
-}
-
 async function hideProjects(container: HTMLElement): Promise<void> {
-	const filter = $optional([
-		'#project-select-menu', // TODO: Drop in March 2025
-		'[data-testid="action-bar-item-projects"]',
-	], container);
+	const filter = $optional('[data-testid="projects-anchor-button"]', container);
 
 	// If the filter is missing, then it has been disabled organization-wide already
 	if (filter && !(await hasAnyProjects.get())) {
@@ -67,22 +50,18 @@ async function hideProjects(container: HTMLElement): Promise<void> {
 
 async function hide(container: HTMLElement): Promise<void> {
 	// Keep separate so that one doesn't crash the other
-	void hideMilestones(container);
 	void hideProjects(container);
 }
 
 async function init(signal: AbortSignal): Promise<void> {
-	await expectToken();
-	observe([
-		'#js-issues-toolbar', // TODO: Remove after March 2025
-		'[data-testid="list-view-metadata"]',
-	], hide, {signal});
+	observe(String.raw`#\:rs\:-list-view-metadata`, hide, {signal});
 }
 
 void features.add(import.meta.url, {
 	include: [
 		pageDetect.isRepoIssueOrPRList,
 	],
+	requiresToken: true,
 	init,
 });
 

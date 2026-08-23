@@ -1,3 +1,5 @@
+import {closestElement, closestElementOptional} from 'select-dom';
+
 /**
 Given any element in a comment, returns the comment’s author
 
@@ -15,28 +17,37 @@ Note: Bots are used as `name[bot]`, `app/name`, or `apps/name` depending on the 
 - https://github.com/apps/dependabot
 
 @returns user-name or dependabot[bot]
-
 */
 export default function getCommentAuthor(anyElementInsideComment: Element): string {
-	const avatar: HTMLImageElement = anyElementInsideComment
-		.closest([
-			'.TimelineItem', // PR comments (and pre-issue redesign issue comments)
-			'.review-comment', // PR review comments
-			'.react-issue-comment', // Issue comments
-			'[data-testid="comment-header"]', // Commit comments
-		])!
+	const avatar: HTMLImageElement | HTMLElement = closestElement([
+		'.TimelineItem', // PR comments (and pre-issue redesign issue comments)
+		'.review-comment', // PR review comments
+		'.react-issue-body', // First issue comment
+		'.react-issue-comment', // Issue comments
+		'[data-testid="comment-header"]', // Commit comments
+	], anyElementInsideComment)
 		.querySelector([
 			'.TimelineItem-avatar img', // PR comments (and pre-issue redesign issue comments)
 			'img.avatar', // PR review comments
 			'img[data-testid="github-avatar"]', // Issue comments
 			'img[data-component="Avatar"]', // Commit comments
+			'.octicon-copilot',
 		])!;
 
-	const name = avatar
+	if (avatar.matches('.octicon-copilot')) {
+		return 'Copilot[bot]';
+	}
+
+	const name = (avatar as HTMLImageElement)
 		.alt // Occasionally ends with `[bot]`
 		.replace(/^@/, ''); // May or may not be present
 
-	if (!name.endsWith('[bot]') && avatar.closest('[href^="https://github.com/apps/"]')) {
+	const appLink = closestElementOptional([
+		'a[href^="/apps/"]',
+		'a[href^="https://github.com/apps/"]',
+	], avatar);
+
+	if (appLink && !name.endsWith('[bot]')) {
 		// Example: https://github.com/webpack/webpack/pull/15926#issuecomment-1170670173
 		return name + '[bot]';
 	}

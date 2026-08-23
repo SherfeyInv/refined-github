@@ -1,33 +1,67 @@
 import React from 'dom-chef';
-import {elementExists} from 'select-dom';
-import PencilIcon from 'octicons-plain-react/Pencil';
 import * as pageDetect from 'github-url-detection';
 import memoize from 'memoize';
+import PencilIcon from 'octicons-plain-react/Pencil';
+import {$, closestElement, elementExists} from 'select-dom';
 
-import observe from '../helpers/selector-observer.js';
 import features from '../feature-manager.js';
-import {isArchivedRepoAsync} from '../github-helpers/index.js';
 import {userIsModerator} from '../github-helpers/get-user-permission.js';
+import {isArchivedRepoAsync} from '../github-helpers/index.js';
+import withMenuOpen from '../github-helpers/with-menu-open.js';
+import onElementRemoval from '../helpers/on-element-removal.js';
+import observe from '../helpers/selector-observer.js';
+import {withTooltipRef} from '../components/tooltip.js';
 
 // The signal is only used to memoize calls on the current page. A new page load will use a new signal.
-const isIssueIneditable = memoize(
-	// If .js-pick-reaction is the first child, `reaction-menu` doesn't exist, which means that the conversation is locked.
-	// However, if you can edit every comment, you can still edit the comment
-	async (_signal: AbortSignal | undefined): Promise<boolean> => elementExists('.js-pick-reaction:first-child') && !await userIsModerator(),
+const isConversationIneditable = memoize(
+	async (_signal: AbortSignal | undefined): Promise<boolean> =>
+		elementExists([
+			'[class*="ReadonlyCommentBox-module"]',
+			// If .js-pick-reaction is the first child, `reaction-menu` doesn't exist, which means that the conversation is locked.
+			// However, if you can edit every comment, you can still edit the comment
+			'.js-pick-reaction:first-child',
+		]) && !await userIsModerator(),
 	{
 		cache: new WeakMap(),
 	},
 );
 
-async function addQuickEditButton(commentDropdown: HTMLDetailsElement, {signal}: SignalAsOptions): Promise<void> {
-	if (await isIssueIneditable(signal)) {
+const editMenuItemSelector = 'li[data-component="ActionList.Item"]:has(.octicon-pencil)';
+
+async function addQuickEditButton(menuButton: HTMLButtonElement, {signal}: SignalAsOptions): Promise<void> {
+	if (await isConversationIneditable(signal)) {
 		features.unload(import.meta.url);
 		return;
 	}
 
-	const commentBody = commentDropdown.closest('.js-comment')!;
+	const editButton = (
+		<button
+			ref={withTooltipRef('Edit comment')}
+			type="button"
+			className="Button Button--iconOnly Button--invisible Button--small"
+			onClick={async () =>
+				withMenuOpen(menuButton, menu => {
+					$(editMenuItemSelector, menu).click();
+				})}
+		>
+			<PencilIcon />
+		</button>
+	);
+	menuButton.before(editButton);
 
-	// TODO: Potentially move to :has selector
+	// Remove our edit button when entering editing mode in case React doesn't, preventing duplicate buttons where only one works
+	await onElementRemoval(menuButton, signal);
+	editButton.remove();
+}
+
+async function addQuickEditButtonLegacy(commentDropdown: HTMLDetailsElement, {signal}: SignalAsOptions): Promise<void> {
+	if (await isConversationIneditable(signal)) {
+		features.unload(import.meta.url);
+		return;
+	}
+
+	const commentBody = closestElement('.js-comment', commentDropdown);
+
 	// The comment is definitely not editable
 	if (!elementExists('.js-comment-update', commentBody)) {
 		return;
@@ -55,10 +89,24 @@ async function init(signal: AbortSignal): Promise<void> {
 		return;
 	}
 
-	// If true then the resulting selector will match all comments, otherwise it will only match those made by you
-	const preSelector = await userIsModerator() ? '' : '.current-user';
+	const isUserModerator = await userIsModerator();
 
-	observe(preSelector + '.js-comment.unminimized-comment .timeline-comment-actions details.position-relative', addQuickEditButton, {signal});
+	observe(
+		// Scoped to comment headers; a bare kebab-button selector also matches unrelated menus like the PR checks section #9771
+		'div:is([class^="IssueBodyHeader"], [data-testid="comment-header"])'
+		+ (isUserModerator ? '' : '[class*="viewerDidAuthor" i]')
+		+ ' '
+		+ 'button[data-component="IconButton"]:has(> .octicon-kebab-horizontal)',
+		addQuickEditButton,
+		{signal},
+	);
+
+	observe(
+		(isUserModerator ? '' : '.current-user')
+		+ '.js-comment.unminimized-comment .timeline-comment-actions details.position-relative',
+		addQuickEditButtonLegacy,
+		{signal},
+	);
 }
 
 void features.add(import.meta.url, {

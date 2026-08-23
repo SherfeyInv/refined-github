@@ -1,19 +1,17 @@
 import './quick-label-removal.css';
 
-import React from 'dom-chef';
-import {elementExists} from 'select-dom';
-import {$} from 'select-dom/strict.js';
-import XIcon from 'octicons-plain-react/X';
-import {assertError} from 'ts-extras';
-import * as pageDetect from 'github-url-detection';
 import delegate, {type DelegateEvent} from 'delegate-it';
+import React from 'dom-chef';
+import * as pageDetect from 'github-url-detection';
+import XIcon from 'octicons-plain-react/X';
+import {$, closestElement, elementExists} from 'select-dom';
+import {assertError} from 'ts-extras';
 
 import features from '../feature-manager.js';
 import api from '../github-helpers/api.js';
-import showToast from '../github-helpers/toast.js';
 import {getConversationNumber} from '../github-helpers/index.js';
+import showToast from '../github-helpers/toast.js';
 import observe from '../helpers/selector-observer.js';
-import {expectToken} from '../github-helpers/github-token.js';
 
 // Don't cache: https://github.com/refined-github/refined-github/issues/7283
 function canEditLabels(): boolean {
@@ -24,24 +22,24 @@ function getLabelList(): HTMLElement {
 	return $('.label-select-menu [src] .hx_rsm-content');
 }
 
-function removeLabelList(): void {
-	const list = getLabelList();
-	list.closest('details')!.addEventListener('toggle', restoreLabelList, {once: true});
-	list.replaceChildren();
-}
-
 function restoreLabelList(): void {
 	const list = getLabelList();
 	list.replaceChildren(
-		<include-fragment src={list.closest('[src]')!.getAttribute('src')!} />,
+		<include-fragment src={closestElement('[src]', list).getAttribute('src')!} />,
 	);
+}
+
+function removeLabelList(): void {
+	const list = getLabelList();
+	closestElement('details', list).addEventListener('toggle', restoreLabelList, {once: true});
+	list.replaceChildren();
 }
 
 async function removeLabelButtonClickHandler(event: DelegateEvent<MouseEvent, HTMLButtonElement>): Promise<void> {
 	event.preventDefault();
 
-	const removeLabelButton = event.delegateTarget;
-	const label = removeLabelButton.closest('a')!;
+	const labelRemovalButton = event.delegateTarget;
+	const label = closestElement('a', labelRemovalButton);
 
 	try {
 		label.hidden = true;
@@ -49,13 +47,13 @@ async function removeLabelButtonClickHandler(event: DelegateEvent<MouseEvent, HT
 		// Each deletion would be followed by a reload of the list _at the wrong time_
 		removeLabelList();
 
-		await api.v3(`issues/${getConversationNumber()!}/labels/${removeLabelButton.dataset.name!}`, {
+		await api.v3(`issues/${getConversationNumber()!}/labels/${labelRemovalButton.dataset.name!}`, {
 			method: 'DELETE',
 		});
 	} catch (error) {
 		assertError(error);
 		void showToast(error);
-		removeLabelButton.blur();
+		labelRemovalButton.blur();
 		label.hidden = false;
 		return;
 	}
@@ -77,8 +75,6 @@ function addRemoveLabelButton(label: HTMLElement): void {
 }
 
 async function init(signal: AbortSignal): Promise<void> {
-	await expectToken();
-
 	delegate('.rgh-quick-label-removal:enabled', 'click', removeLabelButtonClickHandler, {signal});
 	observe('.js-issue-labels .IssueLabel', addRemoveLabelButton, {signal});
 }
@@ -92,6 +88,7 @@ void features.add(import.meta.url, {
 		pageDetect.isArchivedRepo,
 	],
 	awaitDomReady: true, // The sidebar is near the end of the page
+	requiresToken: true,
 	init,
 });
 

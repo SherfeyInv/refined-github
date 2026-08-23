@@ -3,9 +3,10 @@
 	"compilerOptions": {
 		"outDir": "./distribution/assets",
 		"rootDir": "./",
-		"module": "node16",
+		"module": "preserve",
+		"moduleResolution": "bundler",
+		"jsx": "react",
 		"declaration": false,
-		"moduleResolution": "node16",
 		"noUncheckedIndexedAccess": false,
 		"noPropertyAccessFromIndexSignature": false,
 		"resolveJsonModule": true,
@@ -15,12 +16,17 @@
 			"DOM.Iterable",
 			"ESNext.Collection",
 			"ESNext.Object",
-			"ES2023"
+			"ES2024"
+		],
+		"types": [
+			"chrome",
+			"vite/client"
 		]
 	},
 	"include": [
 		"source",
 		"test",
-		"build"
+		"build",
+		"vite.config.ts"
 	]
 }

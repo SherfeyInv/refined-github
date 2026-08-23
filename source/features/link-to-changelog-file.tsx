@@ -1,11 +1,12 @@
 import React from 'dom-chef';
-import {CachedFunction} from 'webext-storage-cache';
 import elementReady from 'element-ready';
 import * as pageDetect from 'github-url-detection';
+import {CachedFunction} from 'webext-storage-cache';
 
 import features from '../feature-manager.js';
 import api from '../github-helpers/api.js';
-import {buildRepoURL, getRepo} from '../github-helpers/index.js';
+import {buildRepoUrl, getRepo} from '../github-helpers/index.js';
+import {withTooltipRef} from '../components/tooltip.js';
 import GetFilesOnRoot from './link-to-changelog-file.gql';
 
 type FileType = {
@@ -13,14 +14,15 @@ type FileType = {
 	type: string;
 };
 
-const changelogFiles = /^(?:changelog|news|changes|history|release|whatsnew)(?:\.(?:mdx?|mkdn?|mdwn|mdown|markdown|litcoffee|txt|rst))?$/i;
+const changelogFiles =
+	/^(?:changelog|news|changes|history|release|whatsnew)(?:\.(?:mdx?|mkdn?|mdwn|mdown|markdown|litcoffee|txt|rst))?$/i;
 function findChangelogName(files: string[]): string | false {
 	return files.find(name => changelogFiles.test(name)) ?? false;
 }
 
 const changelogName = new CachedFunction('changelog', {
 	async updater(nameWithOwner: string): Promise<string | false> {
-		const [owner, name] = nameWithOwner.split('/');
+		const [owner, name] = nameWithOwner.split('/', 2);
 		const {repository} = await api.v4(GetFilesOnRoot, {
 			variables: {name, owner},
 		});
@@ -45,14 +47,14 @@ async function init(): Promise<void | false> {
 	const releasesOrTagsNavbarSelector = [
 		'nav[aria-label^="Releases and Tags"]', // Release list
 		'.subnav-links', // Tag list
-	].join(',');
+	];
 
 	const navbar = await elementReady(releasesOrTagsNavbarSelector);
 	navbar!.append(
 		<a
-			className="subnav-item tooltipped tooltipped-n"
-			aria-label={`View the ${changelog} file`}
-			href={buildRepoURL('blob', 'HEAD', changelog)}
+			ref={withTooltipRef({label: `View the ${changelog} file`, direction: 'n'})}
+			className="subnav-item"
+			href={buildRepoUrl('blob', 'HEAD', changelog)}
 		>
 			<span>Changelog</span>
 		</a>,

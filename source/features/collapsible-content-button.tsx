@@ -1,22 +1,28 @@
-import React from 'dom-chef';
-import FoldDownIcon from 'octicons-plain-react/FoldDown';
-import * as pageDetect from 'github-url-detection';
-import {insertTextIntoField} from 'text-field-edit';
+import cx from 'clsx';
 import delegate, {type DelegateEvent} from 'delegate-it';
-import {$} from 'select-dom/strict.js';
+import React from 'dom-chef';
+import * as pageDetect from 'github-url-detection';
+import FoldDownIcon from 'octicons-plain-react/FoldDown';
+import {$, closestElement} from 'select-dom';
+import {insertTextIntoField} from 'text-field-edit';
 
 import features from '../feature-manager.js';
-import smartBlockWrap from '../helpers/smart-block-wrap.js';
+import {actionBar} from '../github-helpers/selectors.js';
 import observe from '../helpers/selector-observer.js';
-import {triggerActionBarOverflow} from '../github-helpers/index.js';
+import smartBlockWrap from '../helpers/smart-block-wrap.js';
 
 function addContentToDetails({delegateTarget}: DelegateEvent<MouseEvent, HTMLButtonElement>): void {
-	const container = delegateTarget.closest(['form', '[data-testid="comment-composer"]'])!;
+	const container = closestElement([
+		'form',
+		'[data-testid="comment-composer"]', // Add comment form
+		'[class^="MarkdownEditor-module__container"]', // Edit comment form
+	], delegateTarget);
 
 	/* There's only one rich-text editor even when multiple fields are visible; the class targets it #5303 */
 	const field = $([
-		'textarea.js-comment-field', // TODO: remove after March 2025
-		'textarea[aria-labelledby="comment-composer-heading"]',
+		'textarea.js-comment-field', // Legacy, found in some secondary forms
+		'textarea[aria-labelledby="comment-composer-heading"]', // Add comment textarea
+		'[class^="MarkdownInput-module__textArea"] textarea', // Edit comment textarea
 	], container);
 	const selection = field.value.slice(field.selectionStart, field.selectionEnd);
 
@@ -28,7 +34,7 @@ function addContentToDetails({delegateTarget}: DelegateEvent<MouseEvent, HTMLBut
 		${selection}
 
 		</details>
-	`.replaceAll(/(\n|\b)\t+/g, '$1').trim();
+	`.replaceAll(/(?<=\n|\b)\t+/g, '').trim();
 
 	field.focus();
 	insertTextIntoField(field, smartBlockWrap(newContent, field));
@@ -50,42 +56,43 @@ function append(container: HTMLElement): void {
 		'tooltipped',
 		'tooltipped-sw',
 		'rgh-collapsible-content-btn',
+
+		// Old view only
+		'my-auto',
+		'flex-shrink-0',
 	];
 
+	// TODO: ensure it's added only once before both `table-input` and `collapsible-content-button`
 	const divider = $([
-		'hr[data-targets="action-bar.items"]', // TODO: remove after March 2025
-		'[class^="Toolbar-module__divider"]',
-	], container).cloneNode(true) as HTMLElement;
+		'[data-component="ActionBar.VerticalDivider"]', // React component
+		'.ActionBar-divider', // Still used in gists, PRs, etc
+	], container).cloneNode(true);
 
-	container.append(
+	Object.assign(divider.style, {
+		// Sizing copied from GitHub, except the excessive 2em (see `fuchsia` docs)
+		margin: 'auto var(--base-size-8, 2em)',
+
+		// Old style only
+		top: 'initial',
+		bottom: 'initial',
+		transform: 'initial',
+	});
+
+	container.parentElement!.append(
 		divider,
 		<button
 			type="button"
-			className={classes.join(' ')}
+			className={cx(classes)}
 			aria-label="Add collapsible content"
 			data-targets="action-bar.items" // Enables automatic hiding when it doesn't fit
 		>
 			<FoldDownIcon />
 		</button>,
 	);
-
-	if (container.getAttribute('aria-label') === 'Formatting tools')
-		return;
-
-	// Only needed on the old version
-	// TODO: remove after March 2025
-	triggerActionBarOverflow(container);
 }
 
 function init(signal: AbortSignal): void {
-	observe(
-		[
-			'[data-target="action-bar.itemContainer"]', // TODO: remove after March 2025
-			'[aria-label="Formatting tools"]',
-		],
-		append,
-		{signal},
-	);
+	observe(actionBar, append, {signal});
 	delegate('.rgh-collapsible-content-btn', 'click', addContentToDetails, {signal});
 }
 

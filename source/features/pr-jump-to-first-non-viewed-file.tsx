@@ -1,12 +1,16 @@
-import {$optional} from 'select-dom/strict.js';
-import elementReady from 'element-ready';
 import delegate from 'delegate-it';
+import elementReady from 'element-ready';
 import * as pageDetect from 'github-url-detection';
+import {$optional} from 'select-dom';
 
 import features from '../feature-manager.js';
 
 function jumpToFirstNonViewed(): void {
-	const firstNonViewedFile = $optional('[id][data-details-container-group="file"]:not([data-file-user-viewed])');
+	const firstNonViewedFile = $optional([
+		// TODO [2027-01-01]: Old PR Files view, drop
+		'[id][data-details-container-group="file"]:not([data-file-user-viewed])',
+		'[id][class^="Diff-module"]:has(button[aria-pressed="false"])',
+	]);
 	if (firstNonViewedFile) {
 		// Scroll to file without pushing to history
 		location.replace('#' + firstNonViewedFile.id);
@@ -16,11 +20,15 @@ function jumpToFirstNonViewed(): void {
 	}
 }
 
-const selector = '.diffbar-item progress-bar';
+const selectors = [
+	// TODO [2027-01-01]: Old PR Files view, drop
+	'.diffbar-item progress-bar',
+	'.d-flex:has([class*="ViewedFileProgress"])',
+];
 async function init(signal: AbortSignal): Promise<void> {
-	const bar = await elementReady(selector);
+	const bar = await elementReady(selectors);
 	bar!.style.cursor = 'pointer';
-	delegate(selector, 'click', jumpToFirstNonViewed, {signal});
+	delegate(selectors, 'click', jumpToFirstNonViewed, {signal});
 }
 
 void features.add(import.meta.url, {
@@ -29,6 +37,7 @@ void features.add(import.meta.url, {
 	],
 	exclude: [
 		pageDetect.isPRFile404,
+		pageDetect.isPRCommit,
 	],
 	init,
 });

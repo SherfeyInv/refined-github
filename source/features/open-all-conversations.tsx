@@ -1,62 +1,87 @@
+import cx from 'clsx';
+import delegate from 'delegate-it';
 import React from 'dom-chef';
-import {$$} from 'select-dom';
-import delegate, {type DelegateEvent} from 'delegate-it';
-import elementReady from 'element-ready';
 import * as pageDetect from 'github-url-detection';
+import {$$, closestElementOptional} from 'select-dom';
 
 import features from '../feature-manager.js';
 import openTabs from '../helpers/open-tabs.js';
 import observe from '../helpers/selector-observer.js';
 
-const issueListSelector = pageDetect.isGlobalIssueOrPRList()
-	? '#js-issues-toolbar div'
-	: 'div[aria-label="Issues"][role="group"]';
+function onButtonClick(): void {
+	const links = $$([
+		'a[data-testid="issue-pr-title-link"]',
+		// TODO [2027-01-01]: Drop if PR lists have turned React
+		'a.h4.js-navigation-open',
+	]);
 
-function onButtonClick(event: DelegateEvent<MouseEvent, HTMLButtonElement>): void {
-	const onlySelected = event.delegateTarget.closest('.table-list-triage')
-		? ':has(:checked)'
-		: '';
+	if (links.length > 25) {
+		console.warn('Selected too many links. Is the selector still correct?');
+	}
 
-	const issueSelector = `${issueListSelector} .js-issue-row${onlySelected} a.js-navigation-open`;
+	const selectedLinks = links.filter(link =>
+		closestElementOptional([
+			// TODO [2027-01-01]: Drop if PR lists have turned React
+			'.js-issue-row.selected',
+			'[aria-label^="Selected"]',
+		], link),
+	);
 
-	const urls = $$(issueSelector as 'a').map(issue => issue.href);
+	const linksToOpen = selectedLinks.length > 0
+		? selectedLinks
+		: links;
+
+	const urls = linksToOpen.map(link => link.href);
 	void openTabs(urls);
 }
 
-async function hasMoreThanOneConversation(): Promise<boolean> {
-	return Boolean(await elementReady('.js-issue-row + .js-issue-row', {waitForChildren: false}));
-}
-
 function add(anchor: HTMLElement): void {
+	// TODO: Drop after https://github.com/refined-github/refined-github/issues/9893
+	if (closestElementOptional('[class*="RepositoryViews"]', anchor)) {
+		// The user navigate to https://github.com/refined-github/refined-github/issues/views but the previous observer was not unloaded
+		return;
+	}
+
+	const isLegacy = closestElementOptional('.table-list-header-toggle', anchor);
+	const isSelected = closestElementOptional([
+		// TODO [2027-01-01]: Drop if PR lists have turned React
+		'.table-list-triage',
+		'[aria-label="Bulk actions"]',
+	], anchor);
+	const classes = isLegacy
+		? 'btn-link px-2'
+		: isSelected
+			? 'btn'
+			: 'btn btn-sm';
 	anchor.prepend(
 		<button
 			type="button"
-			className="btn-link rgh-open-all-conversations px-2"
+			className={cx('rgh-open-all-conversations', classes)}
 		>
-			{anchor.closest('.table-list-triage') ? 'Open selected' : 'Open all'}
+			{isSelected
+				? 'Open selected'
+				: 'Open all'}
 		</button>,
 	);
 }
 
 async function init(signal: AbortSignal): Promise<void | false> {
-	observe('.table-list-header-toggle:not(.states)', add, {signal});
+	observe(
+		[
+			// TODO [2027-01-01]: Drop if PR lists have turned React
+			'.table-list-header-toggle:not(.states)',
+			'[aria-label="Bulk actions"] > :first-child',
+			'[aria-label="Actions"] > :first-child',
+		],
+		add,
+		{signal},
+	);
 	delegate('button.rgh-open-all-conversations', 'click', onButtonClick, {signal});
 }
 
 void features.add(import.meta.url, {
-	asLongAs: [
-		hasMoreThanOneConversation,
-	],
 	include: [
 		pageDetect.isIssueOrPRList,
-	],
-	exclude: [
-		pageDetect.isGlobalIssueOrPRList,
-	],
-	init,
-}, {
-	include: [
-		pageDetect.isGlobalIssueOrPRList,
 	],
 	init,
 });
@@ -66,7 +91,8 @@ void features.add(import.meta.url, {
 Test URLs:
 
 - Global: https://github.com/issues
-- Repo: https://github.com/sindresorhus/refined-github/pulls
+- Issues: https://github.com/refined-github/refined-github/issues
+- PRs: https://github.com/refined-github/refined-github/pulls
 - Nothing to open: https://github.com/fregante/empty/pulls
 
 */

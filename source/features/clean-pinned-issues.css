@@ -1,58 +1,96 @@
-/* Changes the layout of pinned issues from side-by-side to a standard list. */
-[rgh-clean-pinned-issues] .js-pinned-issues-reorder-container .f4 {
-	display: none !important; /* Hide title */
-}
+html:not([rgh-OFF-clean-pinned-issues]) {
+	@media (width >= 700px) {
+		div[class^='IssueIndexPage-module__middlePaneGrid'] {
+			container-type: inline-size;
 
-[rgh-clean-pinned-issues] .js-pinned-issues-reorder-list {
-	gap: 16px;
-}
+			/* Element whose width is tracked */
+			> div:not([class]) {
+				max-width: 767px; /* Enable native vertical sorting */
+			}
+		}
 
-[rgh-clean-pinned-issues] .pinned-issue-item {
-	width: auto !important;
-	flex: 1;
-	margin-inline: 0 !important;
-}
+		ul[aria-label='Drag and drop pinned issues list.'] {
+			display: table !important;
+			width: 100cqw; /* Restore original width */
 
-@media (width >= 700px) {
-	[rgh-clean-pinned-issues] .js-pinned-issues-reorder-list {
-		display: table !important;
-		width: 100%;
-		margin: 0;
-		margin-bottom: 20px;
+			/* Avoid overflow https://github.com/refined-github/refined-github/issues/9683 */
+			word-break: break-word;
 
-		/* Rounded table border https://stackoverflow.com/a/2586780/288906 */
-		box-shadow: 0 0 0 2px var(--rgh-border-color, fuchsia);
-		border-collapse: collapse;
-		border-radius: 6px;
-		border-style: hidden;
-	}
+			/* Rounded table border https://stackoverflow.com/a/2586780/288906 */
+			box-shadow: 0 0 0 1px var(--rgh-border-outer-color, fuchsia);
+			border-collapse: collapse;
+			border-radius: 6px;
+			border-style: hidden;
+		}
 
-	[rgh-clean-pinned-issues] .pinned-issue-item {
-		display: table-row !important;
-		border-color: var(--rgh-border-color, fuchsia) !important;
-	}
+		div [class*='PinnedIssueContainer'] {
+			padding-top: 4px !important;
+		}
 
-	[rgh-clean-pinned-issues] .pinned-issue-item > * {
-		display: table-cell !important;
-		padding: 6px 12px;
-		vertical-align: middle;
-		white-space: nowrap;
-	}
+		div[class^='DragAndDropContainer']:has(> [class*='PinnedIssues']) {
+			display: table;
+		}
 
-	/* Move `x` before the title and align both icons */
-	[rgh-clean-pinned-issues] .pinned-issue-item > :first-child {
-		display: flex !important;
-		white-space: normal; /* Restore wrapping on title */
-	}
+		[class*='PinnedIssues-module__container'] {
+			display: table-row !important;
+			border-color: var(--rgh-border-color, fuchsia) !important;
 
-	[rgh-clean-pinned-issues] .pinned-issue-handle {
-		order: -1;
-		margin-top: -2px;
-	}
+			> :first-child {
+				padding-inline: 8px !important;
+				&:has(> div[class^='DragAndDropTrigger']) {
+					padding-left: 0 !important;
+				}
+			}
+		}
 
-	[rgh-clean-pinned-issues] .pinned-issue-item form button {
-		float: unset !important;
-		margin-left: -10px;
-		margin-right: 2px !important;
+		div[class^='PinnedIssue-module__contentContainer'] {
+			flex-direction: row;
+
+			/* Align content to the top when the title wraps */
+			align-items: flex-start;
+		}
+
+		span[class^='PinnedIssue-module__Octicon'] {
+			vertical-align: text-bottom;
+			margin-left: -1.5em;
+			/* Pull icon a bit lower to align with the title */
+			line-height: 1.3;
+		}
+
+		/* Prevent title from wrapping below the octicon */
+		a[class*='PinnedIssue-module__Link'] {
+			padding-left: 1.5em;
+		}
+
+		/* Move options button to the end */
+		div[class^='PinnedIssue-module__titleOptionsContainer'] {
+			display: contents;
+			> button {
+				order: 1;
+
+				/* Optically align the button to the title so it's not too near the border */
+				margin-top: 6px;
+			}
+		}
+
+		div[class^='PinnedIssue-module__metadataContainer'] {
+			text-align: end;
+			margin-left: 8px;
+			line-height: 1.2;
+
+			/* Since it grows, the content should still be aligned right */
+			justify-content: flex-end;
+
+			/* Align content to the top when the title wraps */
+			align-items: flex-start;
+
+			/* Optically align the metadata to the title so it's not too near the border */
+			padding-top: 11px;
+
+			/* Hide "opened" */
+			[data-hovercard-type='user'] + span {
+				display: none;
+			}
+		}
 	}
 }

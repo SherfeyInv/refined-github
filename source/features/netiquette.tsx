@@ -1,121 +1,22 @@
-import React from 'dom-chef';
-import FlameIcon from 'octicons-plain-react/Flame';
 import * as pageDetect from 'github-url-detection';
-import toMilliseconds from '@sindresorhus/to-milliseconds';
-import {$optional} from 'select-dom/strict.js';
-import {$$, elementExists} from 'select-dom';
-import twas from 'twas';
-import InfoIcon from 'octicons-plain-react/Info';
-import GitPullRequestDraftIcon from 'octicons-plain-react/GitPullRequestDraft';
+import {closestElementOptional} from 'select-dom';
+import {mount} from 'svelte';
 
-import createBanner from '../github-helpers/banner.js';
 import features from '../feature-manager.js';
-import observe from '../helpers/selector-observer.js';
-import {buildRepoURL, isAnyRefinedGitHubRepo, isOwnConversation} from '../github-helpers/index.js';
-import {getLastCloseEvent} from './jump-to-conversation-close-event.js';
 import {newCommentField} from '../github-helpers/selectors.js';
-import {userIsModerator} from '../github-helpers/get-user-permission.js';
-import looseParseInt from '../helpers/loose-parse-int.js';
+import observe from '../helpers/selector-observer.js';
+import NetiquetteBanner from './netiquette.svelte';
 
-/** Returns milliseconds passed since `date` */
-function timeAgo(date: Date): number {
-	return Date.now() - date.getTime();
-}
-
-function getCloseDate(): Date {
-	const datetime = getLastCloseEvent()!.getAttribute('datetime')!;
-	console.assert(datetime, 'Datetime attribute missing from relative-time');
-	return new Date(datetime);
-}
-
-function isPopular(): boolean {
-	return (
-		$$('[data-testid="comment-header"]').length > 30
-		|| looseParseInt($optional('[aria-label*="other participants"]')?.ariaLabel) > 30
-		|| elementExists('[data-testid="issue-timeline-load-more-count-front"]')
-		// TODO: Drop in April 2025; old conversation style
-		|| $$('.timeline-comment').length > 30
-		|| $$('.participant-avatar').length > 10
-	);
-}
-
-const threeMonths = toMilliseconds({days: 90});
-
-export function wasClosedLongAgo(): boolean {
-	if (!pageDetect.isClosedConversation()) {
-		return false;
-	}
-
-	const closingDate = getCloseDate();
-	return timeAgo(closingDate) > threeMonths;
-}
-
-export function getResolvedText(): JSX.Element {
-	const closingDate = getCloseDate();
-	const ago = <strong>{twas(closingDate.getTime())}</strong>;
-	const newIssue = <a href={buildRepoURL('issues/new/choose')}>new issue</a>;
-	return (
-		<>
-			This {pageDetect.isPR() ? 'PR' : 'issue'} was closed {ago}. Please consider opening a {newIssue} instead of leaving a comment here.
-		</>
-	);
-}
-
-function addResolvedBanner(newCommentField: HTMLElement): void {
-	const reactWrapper = newCommentField.closest('[class^="InlineAutocomplete"]');
-	const banner = createBanner({
-		icon: <InfoIcon className="m-0" />,
-		classes: 'p-2 text-small color-fg-muted border-0 rounded-0'.split(' '),
-		text: getResolvedText(),
+function mountBanner(commentField: HTMLElement): void {
+	const reactWrapper = closestElementOptional('[class^="InlineAutocomplete"]', commentField);
+	const target = reactWrapper ?? commentField;
+	mount(NetiquetteBanner, {
+		target,
+		anchor: target.firstElementChild!,
+		props: {
+			legacy: !reactWrapper,
+		},
 	});
-
-	if (reactWrapper) {
-		reactWrapper.before(banner);
-	} else {
-		banner.classList.replace('rounded-0', 'm-2');
-		newCommentField.prepend(banner);
-	}
-}
-
-function addPopularBanner(newCommentField: HTMLElement): void {
-	const reactWrapper = newCommentField.closest('[class^="InlineAutocomplete"]');
-	const banner = createBanner({
-		icon: <FlameIcon className="m-0" />,
-		classes: 'p-2 text-small color-fg-muted border-0 rounded-0'.split(' '),
-		text: 'This issue is highly active. Reconsider commenting unless you have read all the comments and have something to add.',
-	});
-
-	if (reactWrapper) {
-		reactWrapper.before(banner);
-	} else {
-		banner.classList.replace('rounded-0', 'm-2');
-		newCommentField.prepend(banner);
-	}
-}
-
-function addDraftBanner(newCommentField: HTMLElement): void {
-	newCommentField.prepend(
-		createBanner({
-			icon: <GitPullRequestDraftIcon className="m-0" />,
-			classes: 'p-2 my-2 mx-md-2 text-small color-fg-muted border-0'.split(' '),
-			text: <>This is a <strong>draft PR</strong>, it might not be ready for review.</>,
-		}),
-	);
-}
-
-function initDraft(signal: AbortSignal): void {
-	observe(newCommentField, addDraftBanner, {signal});
-}
-
-function initBanner(signal: AbortSignal): void {
-	observe(newCommentField, async (field: HTMLElement) => {
-		// Check inside the observer because React views load after dom-ready
-		if (wasClosedLongAgo()) {
-			addResolvedBanner(field);
-		} else if (isPopular() && !(await userIsModerator())) {
-			addPopularBanner(field);
-		}
-	}, {signal});
 }
 
 function makeFieldKinder(field: HTMLParagraphElement): void {
@@ -138,34 +39,32 @@ function makeReactFieldKinder(field: HTMLTextAreaElement): void {
 
 function initKindness(signal: AbortSignal): void {
 	observe('p.CommentBox-placeholder', makeFieldKinder, {signal});
-	observe([
-		'textarea[placeholder="Use Markdown to format your comment"]', // On issues
-		'textarea[placeholder="Leave a comment"]', // On single commits
-	], makeReactFieldKinder, {signal});
+	observe(
+		[
+			'textarea[placeholder="Use Markdown to format your comment"]', // On issues
+			'textarea[placeholder="Leave a comment"]', // On single commits
+		],
+		makeReactFieldKinder,
+		{signal},
+	);
+}
+
+function initBanner(signal: AbortSignal): void {
+	observe(newCommentField, mountBanner, {signal});
 }
 
 void features.add(import.meta.url, {
-	exclude: [
-		isAnyRefinedGitHubRepo,
-	],
 	include: [
 		pageDetect.isConversation,
+		pageDetect.isPRFiles,
 	],
-	awaitDomReady: true, // We're specifically looking for the last event
+	awaitDomReady: true, // The comment field is at the end
 	init: initBanner,
-}, {
-	include: [
-		pageDetect.isDraftPR,
-	],
-	exclude: [
-		isOwnConversation,
-	],
-	awaitDomReady: true,
-	init: initDraft,
 }, {
 	include: [
 		pageDetect.hasComments,
 	],
+	awaitDomReady: true, // The comment field is at the end
 	init: initKindness,
 });
 
@@ -174,8 +73,10 @@ void features.add(import.meta.url, {
 Test URLs
 
 - Old issue: https://togithub.com/facebook/react/issues/227
-- Old PR: https://togithub.com/facebook/react/pull/209
 - Popular issue: https://togithub.com/facebook/react/issues/13991
-- Draft PR: https://github.com/refined-github/sandbox/pull/7
+- Old and popular issue: https://togithub.com/react/react/issues/28313
+- Old PR: https://togithub.com/facebook/react/pull/209
+- Draft PR: https://togithub.com/react/react/pull/19377
+- Draft PR files: https://togithub.com/react/react/pull/19377/files
 
 */

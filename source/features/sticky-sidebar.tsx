@@ -1,22 +1,35 @@
 import './sticky-sidebar.css';
 
+import {onAbort} from 'abort-utils';
 import debounce from 'debounce-fn';
 import * as pageDetect from 'github-url-detection';
-import {onAbort} from 'abort-utils';
 
 import features from '../feature-manager.js';
-import observe from '../helpers/selector-observer.js';
 import calculateCssCalcString from '../helpers/calculate-css-calc-string.js';
+import observe from '../helpers/selector-observer.js';
 
 const minimumViewportWidthForSidebar = 768; // Less than this, the layout is single-column
 
 const sidebarSelector = [
-	'.Layout-sidebar .BorderGrid', // `isRepoRoot`
-	'.Layout-sidebar #partial-discussion-sidebar', // Old `isConversation`
-	'div[data-testid="issue-viewer-metadata-pane"]', // `isConversation`
+	'#partial-discussion-sidebar', // `isDiscussion`, `isPRConversation`
+	'div[class^="prc-PageLayout-Pane"]:has(> rails-partial[data-partial-name="codeViewRepoRoute.Sidebar"])', // `isRepoRoot`
 ];
 
 let sidebar: HTMLElement | undefined;
+
+function updateStickiness(): void {
+	if (!sidebar) {
+		return;
+	}
+
+	const offset = calculateCssCalcString(getComputedStyle(sidebar).getPropertyValue('--rgh-sticky-sidebar-offset'));
+	sidebar.classList.toggle(
+		'rgh-sticky-sidebar',
+		window.innerWidth >= minimumViewportWidthForSidebar
+		&& sidebar.offsetHeight + offset <= window.innerHeight,
+	);
+}
+
 const onResize = debounce(updateStickiness, {wait: 100});
 const sidebarObserver = new ResizeObserver(onResize);
 
@@ -34,28 +47,15 @@ function toggleHoverState(event: MouseEvent): void {
 // Can't use delegate because it's not efficient to track mouse events across the document
 function trackSidebar(signal: AbortSignal, foundSidebar: HTMLElement): void {
 	sidebar = foundSidebar;
+	sidebar.style.height = 'min-content';
+
 	sidebarObserver.observe(sidebar);
 	onAbort(signal, sidebarObserver, () => {
 		sidebar = undefined;
 	});
 
-	sidebar.parentElement?.classList.add('rgh-sticky-sidebar-container');
-
 	sidebar.addEventListener('mouseenter', toggleHoverState, {signal});
 	sidebar.addEventListener('mouseleave', toggleHoverState, {signal});
-}
-
-function updateStickiness(): void {
-	if (!sidebar) {
-		return;
-	}
-
-	const offset = calculateCssCalcString(getComputedStyle(sidebar).getPropertyValue('--rgh-sticky-sidebar-offset'));
-	sidebar.classList.toggle(
-		'rgh-sticky-sidebar',
-		window.innerWidth >= minimumViewportWidthForSidebar
-		&& sidebar.offsetHeight + offset < window.innerHeight,
-	);
 }
 
 function init(signal: AbortSignal): void {
@@ -72,7 +72,8 @@ function init(signal: AbortSignal): void {
 void features.add(import.meta.url, {
 	include: [
 		pageDetect.isRepoRoot,
-		pageDetect.isConversation,
+		pageDetect.isPRConversation,
+		pageDetect.isDiscussion,
 	],
 	exclude: [
 		() => screen.availWidth < minimumViewportWidthForSidebar,
@@ -84,7 +85,8 @@ void features.add(import.meta.url, {
 
 Test URLs:
 
-Repo: https://github.com/refined-github/refined-github
-Conversation: https://github.com/refined-github/refined-github/issues/6752
+- Repo: https://github.com/refined-github/refined-github
+- PR conversation: https://github.com/refined-github/refined-github/pull/755
+- Discussion: https://github.com/orgs/community/discussions/40299
 
 */

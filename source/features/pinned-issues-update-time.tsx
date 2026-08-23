@@ -1,29 +1,28 @@
-import React from 'dom-chef';
-import {CachedFunction} from 'webext-storage-cache';
-import {$} from 'select-dom/strict.js';
 import batchedFunction from 'batched-function';
+import React from 'dom-chef';
 import * as pageDetect from 'github-url-detection';
+import {CachedFunction} from 'webext-storage-cache';
 
 import features from '../feature-manager.js';
 import api from '../github-helpers/api.js';
 import {getRepo} from '../github-helpers/index.js';
-import looseParseInt from '../helpers/loose-parse-int.js';
 import observe from '../helpers/selector-observer.js';
-import {expectToken} from '../github-helpers/github-token.js';
 
 type IssueInfo = {
 	updatedAt: string;
 };
 
-const getLastUpdated = new CachedFunction('last-updated', {
+const lastUpdatedCache = new CachedFunction('last-updated', {
 	async updater(issueNumbers: number[]): Promise<Record<string, IssueInfo>> {
 		const {repository} = await api.v4(`
 		repository() {
-			${issueNumbers.map(number => `
-				${api.escapeKey(number)}: issue(number: ${number}) {
-					updatedAt
-				}
-			`).join('\n')}
+			${
+				issueNumbers.map(number => `
+					${api.escapeKey(number)}: issue(number: ${number}) {
+						updatedAt
+					}
+				`).join('\n')
+			}
 		}
 	`);
 
@@ -33,36 +32,37 @@ const getLastUpdated = new CachedFunction('last-updated', {
 	cacheKey: ([issues]) => `${getRepo()!.nameWithOwner}:${String(issues)}`,
 });
 
-function getPinnedIssueNumber(pinnedIssue: HTMLElement): number {
-	return looseParseInt($('.opened-by', pinnedIssue).firstChild!);
+function getPinnedIssueNumber(pinnedIssueMetadata: HTMLElement): number {
+	const {issueNumber} = /#(?<issueNumber>\d+)/.exec(pinnedIssueMetadata.textContent)!.groups!;
+	return Number(issueNumber);
 }
 
-async function update(pinnedIssues: HTMLElement[]): Promise<void> {
-	const lastUpdated: Record<string, IssueInfo> = await getLastUpdated.get(pinnedIssues.map(issue => getPinnedIssueNumber(issue)));
-	for (const pinnedIssue of pinnedIssues) {
-		const issueNumber = getPinnedIssueNumber(pinnedIssue);
+async function update(pinnedIssuesMetadata: HTMLElement[]): Promise<void> {
+	const issuesByNumber = new Map(pinnedIssuesMetadata.map(metadata => [getPinnedIssueNumber(metadata), metadata]));
+	const lastUpdated = await lastUpdatedCache.get([...issuesByNumber.keys()]);
+
+	for (const [issueNumber, issueMetadata] of issuesByNumber) {
 		const {updatedAt} = lastUpdated[api.escapeKey(issueNumber)];
-		const originalLine = $('.opened-by', pinnedIssue);
-		originalLine.after(
+		issueMetadata.after(
 			// .rgh class enables tweakers to hide the number
 			<span className="text-small color-fg-muted">
 				<span className="rgh-pinned-issue-number">#{issueNumber}</span> updated <relative-time datetime={updatedAt} />
 			</span>,
 		);
 
-		originalLine.hidden = true;
+		issueMetadata.hidden = true;
 	}
 }
 
 async function init(signal: AbortSignal): Promise<void> {
-	await expectToken();
-	observe('.pinned-issue-item', batchedFunction(update, {delay: 100}), {signal});
+	observe('span[class^="PinnedIssue-module__issueMetadata"]', batchedFunction(update, {delay: 100}), {signal});
 }
 
 void features.add(import.meta.url, {
 	include: [
 		pageDetect.isRepoIssueList,
 	],
+	requiresToken: true,
 	init,
 });
 

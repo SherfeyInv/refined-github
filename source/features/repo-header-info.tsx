@@ -1,87 +1,93 @@
+import './repo-header-info.css';
+
+import React from 'dom-chef';
 import * as pageDetect from 'github-url-detection';
 import LockIcon from 'octicons-plain-react/Lock';
-import RepoForkedIcon from 'octicons-plain-react/RepoForked';
-import StarIcon from 'octicons-plain-react/Star';
-import StarFillIcon from 'octicons-plain-react/StarFill';
-import React from 'dom-chef';
-import {elementExists} from 'select-dom';
-import {CachedFunction} from 'webext-storage-cache';
+import {$, elementExists} from 'select-dom';
+import {mount} from 'svelte';
 
-import observe from '../helpers/selector-observer.js';
 import features from '../feature-manager.js';
 import api from '../github-helpers/api.js';
-import GetRepositoryInfo from './repo-header-info.gql';
-import {buildRepoURL, cacheByRepo} from '../github-helpers/index.js';
-import abbreviateNumber from '../helpers/abbreviate-number.js';
-import {expectToken} from '../github-helpers/github-token.js';
+import {appendBefore, isSmallDevice} from '../helpers/dom-utils.js';
+import observe from '../helpers/selector-observer.js';
+import GetRepoInfo from './repo-header-info.gql';
+import RepoHeaderInfo from './repo-header-info.svelte';
+import {buildRepoUrl} from '../github-helpers/index.js';
 
-type RepositoryInfo = {
-	isFork: boolean;
+export type RepositoryInfo = {
+	forked?: {url: string};
 	isPrivate: boolean;
 	stargazerCount: number;
 	viewerHasStarred: boolean;
+	ciCommit?: string;
+	stargazerUrl?: string;
 };
 
-const repositoryInfo = new CachedFunction('stargazer-count', {
-	async updater(): Promise<RepositoryInfo> {
-		const {repository} = await api.v4(GetRepositoryInfo);
-		return repository;
-	},
-	maxAge: {days: 1},
-	staleWhileRevalidate: {days: 3},
-	cacheKey: cacheByRepo,
-});
+async function getRepositoryInfo(): Promise<RepositoryInfo> {
+	const {repository} = await api.v4(GetRepoInfo);
 
-async function add(repoLink: HTMLAnchorElement): Promise<void> {
-	const {isFork, isPrivate, stargazerCount, viewerHasStarred} = await repositoryInfo.get();
+	let ciCommit: string | undefined;
+	if (!repository.isEmpty && repository.defaultBranchRef) {
+		// Check earlier commits just in case the last one is CI-generated and doesn't have checks
+		for (const commit of repository.defaultBranchRef.target.history.nodes) {
+			if (!commit.statusCheckRollup) {
+				continue;
+			}
 
-	// GitHub may already show this icon natively, so we match its position
-	if (isPrivate && !elementExists('.octicon-lock', repoLink)) {
-		repoLink.append(
-			<LockIcon className="ml-1" width={12} height={12} />,
-		);
-	}
-
-	// GitHub may already show this icon natively, so we match its position
-	if (isFork && !elementExists('.octicon-repo-forked', repoLink)) {
-		repoLink.append(
-			<RepoForkedIcon className="ml-1" width={12} height={12} />,
-		);
-	}
-
-	if (stargazerCount > 1) {
-		let tooltip = `Repository starred by ${stargazerCount.toLocaleString('us')} people`;
-		if (viewerHasStarred) {
-			tooltip += ', including you';
+			ciCommit = commit.oid;
+			break;
 		}
+	}
 
-		repoLink.after(
-			<a
-				href={buildRepoURL('stargazers')}
-				title={tooltip}
-				className="d-flex flex-items-center flex-justify-center mr-1 gap-1 color-fg-muted"
-			>
-				{
-					viewerHasStarred
-						// Use `color` because `fill` is overridden with `currentColor`
-						? <StarFillIcon className="ml-1" width={12} height={12} color="var(--button-star-iconColor)" />
-						: <StarIcon className="ml-1" width={12} height={12} />
-				}
-				<span className="f5">{abbreviateNumber(stargazerCount)}</span>
-			</a>,
+	return {
+		...repository,
+		ciCommit,
+		stargazerUrl: repository.viewerPermission === 'READ'
+			? undefined // No access: https://github.com/refined-github/refined-github/issues/9964
+			: buildRepoUrl('stargazers'),
+	};
+}
+
+async function add(breadcrumbs: HTMLElement): Promise<void> {
+	const info = await getRepositoryInfo();
+	breadcrumbs.classList.add('rgh-repo-header-info-updated');
+
+	// GitHub may already show this icon natively, so we match its position
+	// It's generally missing when it's forked and private
+	if (info.isPrivate && !elementExists('.octicon-lock', breadcrumbs)) {
+		const repoLink = $(':scope > li:last-child a', breadcrumbs);
+		appendBefore(
+			repoLink,
+			'.octicon-repo-forked',
+			<LockIcon className="mr-1 tmp-mr-1 v-align-middle" width={12} height={12} />,
 		);
 	}
+
+	if (info.forked) {
+		// Only show the clickable button at larger resolutions. Default to the native one on smaller screens
+		$('.octicon-repo-forked', breadcrumbs).classList.add('d-md-none');
+	}
+
+	mount(RepoHeaderInfo, {
+		target: breadcrumbs,
+		props: {info},
+	});
 }
 
 async function init(signal: AbortSignal): Promise<void> {
-	await expectToken();
-	observe('.AppHeader-context-full li:last-child a.AppHeader-context-item', add, {signal});
+	observe('.loaded .GlobalNav nav[data-component="Breadcrumbs"] ol', add, {signal});
 }
 
+void features.addCssFeature(import.meta.url);
 void features.add(import.meta.url, {
 	include: [
 		pageDetect.hasRepoHeader,
 	],
+	exclude: [
+		// Disable the feature entirely on small screens
+		isSmallDevice,
+	],
+	requiresToken: true,
 	init,
 });
 
@@ -90,8 +96,8 @@ Test URLs
 
 - Regular: https://github.com/refined-github/refined-github
 - Fork: https://github.com/134130/refined-github
-- Fork with native icon: https://github.com/refined-github/fork
 - Private: https://github.com/refined-github/private
-- Private fork: https://github.com/refined-github/fork
-
+- Private fork: https://github.com/refined-github/private-fork
+- CI: https://github.com/refined-github/refined-github
+- No CI: https://github.com/fregante/.github
 */

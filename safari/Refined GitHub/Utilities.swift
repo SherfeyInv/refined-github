@@ -1,7 +1,33 @@
 import SwiftUI
+import SafariServices
+
+
+enum SafariExtension {
+	#if os(macOS)
+	static func isEnabled(forIdentifier identifier: String) async throws -> Bool {
+		try await SFSafariExtensionManager.stateOfSafariExtension(withIdentifier: identifier).isEnabled
+	}
+
+	static func openSettings(forIdentifier identifier: String) async throws {
+		try await SFSafariApplication.showPreferencesForExtension(withIdentifier: identifier)
+	}
+	#else
+	@available(iOS 26.2, visionOS 26.2, *)
+	static func isEnabled(forIdentifier identifier: String) async throws -> Bool {
+		try await SFSafariExtensionManager.stateOfExtension(withIdentifier: identifier).isEnabled
+	}
+
+	@available(iOS 26.2, visionOS 26.2, *)
+	static func openSettings(forIdentifier identifier: String) async throws {
+		try await SFSafariSettings.openExtensionsSettings(forIdentifiers: [identifier])
+	}
+	#endif
+}
 
 
 enum SSApp {
+	static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "<Unknown version>"
+
 	static let isFirstLaunch: Bool = {
 		let key = "SS_hasLaunched"
 
@@ -19,7 +45,10 @@ struct ShareAppLink: View {
 	let appStoreIdentifier: String
 
 	var body: some View {
-		ShareLink("Share App", item: "https://apps.apple.com/app/id\(appStoreIdentifier)")
+		ShareLink(
+			"Share App",
+			item: "https://apps.apple.com/app/id\(appStoreIdentifier)"
+		)
 	}
 }
 
@@ -34,7 +63,11 @@ struct RateAppLink: View {
 	let appStoreIdentifier: String
 
 	var body: some View {
-		Link("Rate App", destination: URL(string: "\(Self.urlScheme)://apps.apple.com/app/id\(appStoreIdentifier)?action=write-review")!)
+		Link(
+			"Rate App",
+			systemImage: "star",
+			destination: URL(string: "\(Self.urlScheme)://apps.apple.com/app/id\(appStoreIdentifier)?action=write-review")!
+		)
 	}
 }
 
@@ -218,3 +251,16 @@ extension Error {
 	}
 }
 #endif
+
+
+extension Link<Label<Text, Image>> {
+	init(
+		_ title: String,
+		systemImage: String,
+		destination: URL
+	) {
+		self.init(destination: destination) {
+			Label(title, systemImage: systemImage)
+		}
+	}
+}

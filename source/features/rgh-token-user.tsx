@@ -1,38 +1,39 @@
-import React from 'react';
 import AlertIcon from 'octicons-plain-react/Alert';
+import React from 'dom-chef';
 
 import features from '../feature-manager.js';
-import observe from '../helpers/selector-observer.js';
-import {getUsername} from '../github-helpers/index.js';
-import {getToken} from '../options-storage.js';
-import {tokenUser} from '../github-helpers/github-token.js';
 import {api3} from '../github-helpers/api.js';
-import createBanner from '../github-helpers/banner.js';
+import {tokenUser} from '../github-helpers/github-token.js';
+import {getLoggedInUser} from '../github-helpers/index.js';
 import onetime from '../helpers/onetime.js';
 import {OptionsLink} from '../helpers/open-options.js';
+import observe from '../helpers/selector-observer.js';
+import {getToken} from '../options-storage.js';
 
-async function verify(header: HTMLButtonElement): Promise<void> {
+async function verify(header: HTMLElement): Promise<void> {
 	const token = await getToken();
 	if (!token) {
 		return;
 	}
 
-	const currentWebUser = getUsername();
+	const currentWebUser = getLoggedInUser();
 	const currentTokenUser = await tokenUser.get(api3, token);
 	if (currentWebUser !== currentTokenUser) {
-		header.after(createBanner({
-			icon: <AlertIcon />,
-			classes: ['mx-3', 'mt-3', 'mb-0', 'py-2'],
-			text: [
-				<>Your <OptionsLink className="btn-link">Refined GitHub token</OptionsLink> is for a different user, the extension will act on behalf of <code>{currentTokenUser}</code></>,
-			],
-		},
-		));
+		header.after(
+			// Use raw "flash" classes to blend in better with the dropdown menu
+			<div className="flash flash-error px-3 tmp-px-3 mt-3 tmp-mt-3 mb-0 tmp-mb-0 py-2 tmp-py-2 d-flex flex-items-center border-0 rounded-0">
+				<AlertIcon className="mr-2 tmp-mr-2" />
+				<span>
+					Write API calls are blocked because your <OptionsLink className="btn-link">Refined GitHub token</OptionsLink>{' '}
+					belongs to <code>{currentTokenUser}</code>, not <code>{currentWebUser}</code>.
+				</span>
+			</div>,
+		);
 	}
 }
 
 function initOnce(): void {
-	observe('[aria-label="User navigation"][role="heading"]', verify);
+	observe('div[aria-labelledby="global-nav-user-menu-header"] > div[role="heading"]', verify);
 }
 
 void features.add(import.meta.url, {

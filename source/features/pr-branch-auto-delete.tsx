@@ -1,16 +1,18 @@
 import React from 'dom-chef';
-import {$optional} from 'select-dom/strict.js';
-import InfoIcon from 'octicons-plain-react/Info';
 import elementReady from 'element-ready';
 import * as pageDetect from 'github-url-detection';
+import InfoIcon from 'octicons-plain-react/Info';
 
 import features from '../feature-manager.js';
-import onPrMerge from '../github-events/on-pr-merge.js';
-import {getFeatureUrl} from '../helpers/rgh-links.js';
+import waitForPrMerge from '../github-events/on-pr-merge.js';
+import api from '../github-helpers/api.js';
+import {userCanLikelyMergePr} from '../github-helpers/index.js';
 import {getBranches} from '../github-helpers/pr-branches.js';
 import matchesAnyPattern from '../helpers/matches-any-patterns.js';
-import {getFeatureID} from '../helpers/feature-helpers.js';
+import GetPrsToBaseBranchAndDeleteOnMerge from './pr-branch-auto-delete.gql';
 
+// DO NOT ask for additions or customizations. This is just a list of "obvious" permanent branches.
+// Protect your permanent branches instead: https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches
 const exceptions = [
 	'dev',
 	'develop',
@@ -27,39 +29,57 @@ const exceptions = [
 	/^v\d/,
 ];
 
-async function init(): Promise<void> {
-	const deleteButton = $optional('[action$="/cleanup"] [type="submit"]');
-	if (!deleteButton) {
+async function init(signal: AbortSignal): Promise<void> {
+	// Skip branches that are likely to be long-lived https://github.com/refined-github/refined-github/issues/7755
+	const {head} = getBranches();
+	if (matchesAnyPattern(head.branch, exceptions)) {
 		return;
 	}
 
-	if (matchesAnyPattern(getBranches().head.branch, exceptions)) {
+	// Skip branches that have PRs open https://github.com/refined-github/refined-github/issues/7782
+	const {repository} = await api.v4(GetPrsToBaseBranchAndDeleteOnMerge, {
+		variables: {
+			baseRefName: head.branch,
+		},
+	});
+	if (repository.pullRequests.totalCount > 0 || repository.deleteBranchOnMerge) {
 		return;
 	}
 
-	deleteButton.dataset.disableWith = 'Auto-deleting…';
-	deleteButton.click();
+	await waitForPrMerge(signal);
+
+	const branchDeletionButton = await elementReady('div[class^="MergeBoxSectionHeader-module__contentLayout"] button', {
+		predicate: button => button.textContent.trim() === 'Delete branch',
+		stopOnDomReady: false,
+		signal,
+	});
+	branchDeletionButton!.click();
 
 	const deletionEvent = await elementReady('.TimelineItem-body:has(.pull-request-ref-restore-text)', {
 		stopOnDomReady: false,
-		timeout: 2000,
+		signal,
 	});
-
-	const url = getFeatureUrl(getFeatureID(import.meta.url));
+	const url
+		= 'https://github.com/refined-github/refined-github/wiki/Extended-feature-descriptions#pr-branch-auto-delete';
 	deletionEvent!.append(
-		<a className="d-inline-block" href={url}>via Refined GitHub <InfoIcon /></a>,
+		<a className="d-inline-block" href={url}>
+			via Refined GitHub <InfoIcon />
+		</a>,
 	);
 }
 
 void features.add(import.meta.url, {
 	asLongAs: [
+		userCanLikelyMergePr,
+	],
+	include: [
 		pageDetect.isPRConversation,
-		pageDetect.isOpenConversation,
+	],
+	exclude: [
+		pageDetect.isMergedPR,
 	],
 	awaitDomReady: true, // Post-load user event, no need to listen earlier
-	init(signal: AbortSignal): void {
-		onPrMerge(init, signal);
-	},
+	init,
 });
 
 /*

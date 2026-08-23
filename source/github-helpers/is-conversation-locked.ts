@@ -2,12 +2,12 @@ import elementReady from 'element-ready';
 
 import {isInitialLoad} from '../helpers/feature-helpers.js';
 import {hasToken} from '../options-storage.js';
-import api from '../github-helpers/api.js';
+import api from './api.js';
+import {getConversationNumber} from './index.js';
 import GetIssueLockStatus from './is-conversation-locked.gql';
-import {getConversationNumber} from '../github-helpers/index.js';
 
 async function isConversationLockedViaApi(): Promise<boolean | undefined> {
-	if (!hasToken()) {
+	if (!await hasToken()) {
 		return undefined;
 	}
 
@@ -25,7 +25,7 @@ async function isConversationLockedViaDom(): Promise<boolean | undefined> {
 	const lockToggle = await elementReady([
 		'.discussion-sidebar-item svg.octicon-key + strong', // PRs, old issues
 		'[class^="Item__LiBox"]:has(svg.octicon-lock) [data-component="ActionList.Item--DividerContainer"] span', // Issues
-	].join(', '));
+	]);
 	return lockToggle ? lockToggle.textContent === 'Unlock conversation' : undefined;
 }
 
@@ -35,21 +35,23 @@ async function isConversationLockedViaReactData(): Promise<boolean | undefined> 
 	}
 
 	const data = await elementReady('[data-target="react-app.embeddedData"]');
-	return data ? JSON.parse(data.textContent).payload?.preloadedQueries[0].result.data.repository?.issue?.locked : undefined;
+	return data
+		? JSON.parse(data.textContent).payload?.preloadedQueries?.[0].result.data.repository?.issue?.locked
+		: undefined;
 }
 
 export default async function isConversationLocked(): Promise<boolean | undefined> {
 	// Like Promise.race, but it only resolves if the result is not undefined
 	return new Promise(resolve => {
-		// TODO: Add AbortSignal after https://github.com/sindresorhus/element-ready/issues/45
 		const resolveIfDefined = async (check: () => Promise<boolean | undefined>): Promise<void> => {
-			const result = await check();
-			if (result !== undefined) {
-				resolve(result);
+			const isLocked = await check();
+			if (isLocked !== undefined) {
+				resolve(isLocked);
 			}
 		};
-		resolveIfDefined(isConversationLockedViaReactData);
-		resolveIfDefined(isConversationLockedViaDom);
-		resolveIfDefined(isConversationLockedViaApi);
+
+		void resolveIfDefined(isConversationLockedViaReactData);
+		void resolveIfDefined(isConversationLockedViaDom);
+		void resolveIfDefined(isConversationLockedViaApi);
 	});
 }

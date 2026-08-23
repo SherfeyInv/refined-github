@@ -1,61 +1,58 @@
 import './clean-repo-sidebar.css';
-import {elementExists} from 'select-dom';
-import {$, $optional} from 'select-dom/strict.js';
 import domLoaded from 'dom-loaded';
 import elementReady from 'element-ready';
 import * as pageDetect from 'github-url-detection';
+import {$, $optional, closestElement, elementExists} from 'select-dom';
 
 import features from '../feature-manager.js';
+import {assertNodeContent} from '../helpers/dom-utils.js';
+
 // The h2 is to avoid hiding website links that include '/releases' #4424
-// TODO: It's broken
-const releasesSidebarSelector = '.Layout-sidebar .BorderGrid-cell h2 a[href$="/releases"]';
+// It's broken: https://github.com/refined-github/refined-github/issues/9339
 async function cleanReleases(): Promise<void> {
-	const sidebarReleases = await elementReady(releasesSidebarSelector, {waitForChildren: false});
+	const sidebarReleases = await elementReady('[class*="PageLayout-Pane"] .BorderGrid-cell h2 a[href$="/releases"]', {
+		waitForChildren: false,
+	});
 	if (!sidebarReleases) {
 		return;
 	}
 
-	const releasesSection = sidebarReleases.closest('.BorderGrid-cell')!;
-	if (!elementExists('.octicon-tag', releasesSection)) {
+	const releasesSection = closestElement('.BorderGrid-cell', sidebarReleases);
+	if (
 		// Hide the whole section if there's no releases
+		!elementExists('.octicon-tag', releasesSection)
+		// Don't hide the section if it has a "Create new release" link
+		&& !elementExists('a[href$="releases/new"]', releasesSection)
+	) {
 		releasesSection.hidden = true;
-		return;
 	}
-
-	// Collapse "Releases" section into previous section
-	releasesSection.classList.add('border-0', 'pt-md-0');
-	sidebarReleases.closest('.BorderGrid-row')!
-		.previousElementSibling! // About’s .BorderGrid-row
-		.firstElementChild! // About’s .BorderGrid-cell
-		.classList
-		.add('border-0', 'pb-0');
 }
 
 async function hideLanguageHeader(): Promise<void> {
 	await domLoaded;
 
-	const lastSidebarHeader = $optional('.Layout-sidebar .BorderGrid-row:last-of-type h2');
-	if (lastSidebarHeader?.textContent === 'Languages') {
-		lastSidebarHeader.hidden = true;
-	}
+	const languageHeader = $("[class*='PageLayout-Pane'] .BorderGrid-row:has(.Progress-item) h2");
+	assertNodeContent(languageHeader.firstChild, 'Languages');
+	languageHeader.classList.add('sr-only');
 }
 
 // Hide empty meta if it’s not editable by the current user
 async function hideEmptyMeta(): Promise<void> {
 	await domLoaded;
 
-	if (!pageDetect.canUserEditRepo()) {
-		$optional('.Layout-sidebar .BorderGrid-cell > .text-italic')?.remove();
+	if (!pageDetect.canUserAccessRepoSettings()) {
+		// Selector only matches if it's empty
+		$optional("[class*='PageLayout-Pane'] .BorderGrid-cell > .text-italic")?.remove();
 	}
 }
 
 async function moveReportLink(): Promise<void> {
 	await domLoaded;
 
-	const reportLink = $optional('.Layout-sidebar a[href^="/contact/report-content"]')?.parentElement;
+	// Your own repos don't include this link
+	const reportLink = $optional("[class*='PageLayout-Pane'] a[href^='/contact/report-content']")?.parentElement;
 	if (reportLink) {
-		// Your own repos don't include this link
-		$('.Layout-sidebar .BorderGrid-row:last-of-type .BorderGrid-cell').append(reportLink);
+		$("[class*='PageLayout-Pane'] .BorderGrid-row:last-of-type .BorderGrid-cell").append(reportLink);
 	}
 }
 
@@ -84,5 +81,7 @@ Test URLs:
 - https://github.com/refined-github/refined-github
 - Repo with empty packages section: https://github.com/isaacs/node-glob
 - Repo with 1 package: https://github.com/recyclarr/recyclarr
+- Repo with tags but not releases: https://github.com/fregante/bin-dir
+- Repo with no tags: https://github.com/refined-github/yolo
 
 */

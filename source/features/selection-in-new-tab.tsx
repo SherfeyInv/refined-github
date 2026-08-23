@@ -1,12 +1,18 @@
-import {$optional} from 'select-dom/strict.js';
+import {$optional, closestElementOptional} from 'select-dom';
 import {messageRuntime} from 'webext-msg';
 
-import onetime from '../helpers/onetime.js';
 import features from '../feature-manager.js';
 import {registerHotkey} from '../github-helpers/hotkey.js';
+import onetime from '../helpers/onetime.js';
 
 function openInNewTab(): void {
-	const selected = $optional('.navigation-focus a.js-navigation-open[href]');
+	const selected = $optional([
+		'.navigation-focus a.js-navigation-open[href]',
+		// Old view
+		// TODO [2025-07-01]: Drop
+		'[data-focus-visible-added] .markdown-title a',
+	]);
+
 	if (!selected) {
 		return;
 	}
@@ -16,7 +22,7 @@ function openInNewTab(): void {
 	});
 
 	// Get the list element that contains the unread class and mark it as read.
-	selected.closest('.unread')?.classList.replace('unread', 'read');
+	closestElementOptional('.unread', selected)?.classList.replace('unread', 'read');
 }
 
 function initOnce(): void {

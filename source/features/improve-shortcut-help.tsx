@@ -1,64 +1,70 @@
+import './improve-shortcut-help.css';
+
 import React from 'dom-chef';
-import {elementExists} from 'select-dom';
-import {$, $optional} from 'select-dom/strict.js';
+import memoize from 'memoize';
+import {$} from 'select-dom';
 
-import onetime from '../helpers/onetime.js';
 import features from '../feature-manager.js';
-import {isEditable} from '../helpers/dom-utils.js';
+import {upperCaseFirst} from '../github-helpers/index.js';
 import {shortcutMap} from '../helpers/feature-helpers.js';
+import joinJsx from '../helpers/join-jsx.js';
+import observe from '../helpers/selector-observer.js';
 
-function splitKeys(keys: string): DocumentFragment[] {
-	return keys.split(' ').map(key => <> <kbd>{key}</kbd></>);
-}
+const getRghShortcutsContainer = memoize(
+	(baseShortcutsContainer: Element): Element => {
+		const rghShortcutsContainer = baseShortcutsContainer.cloneNode(true);
+		const shortcutsList = $('ul', rghShortcutsContainer);
+		const shortcutItem = $('[class^="ShortcutsGroupList-module__ShortcutItem"]', shortcutsList);
+		const keybindingHint = $('kbd', shortcutItem);
+		const chord = $('span', shortcutItem);
 
-function improveShortcutHelp(dialog: Element): void {
-	$('.Box-body .col-5 .Box:first-child', dialog).after(
-		<div className="Box Box--condensed m-4">
-			<div className="Box-header">
-				<h2 className="Box-title">Refined GitHub</h2>
-			</div>
+		$('h2', rghShortcutsContainer).textContent = 'Refined GitHub';
+		shortcutsList.replaceChildren(
+			...[...shortcutMap]
+				.toSorted(([, a], [, b]) => a.localeCompare(b))
+				.map(([hotkey, description]) => {
+					const keys = hotkey.split(' ').map(key =>
+						<span className={chord.className}>
+							{upperCaseFirst(key)}
+						</span>,
+					);
+					const currentItem = shortcutItem.cloneNode(true);
+					currentItem.firstElementChild!.textContent = description;
+					currentItem.lastElementChild!.replaceChildren(
+						<kbd className={keybindingHint.className}>
+							{joinJsx(' ', keys)}
+						</kbd>,
+					);
+					return currentItem;
+				}),
+		);
 
-			<ul>
-				{[...shortcutMap]
-					.sort(([, a], [, b]) => a.localeCompare(b))
-					.map(([hotkey, description]) => (
-						<li className="Box-row d-flex flex-row">
-							<div className="flex-auto">{description}</div>
-							<div className="ml-2 no-wrap">
-								{splitKeys(hotkey)}
-							</div>
-						</li>
-					))}
-			</ul>
-		</div>,
-	);
-}
+		return rghShortcutsContainer;
+	},
+	{
+		cacheKey: () => location.origin + location.pathname,
+	},
+);
 
-const observer = new MutationObserver(([{target}]) => {
-	if (target instanceof Element && !elementExists('.js-details-dialog-spinner', target)) {
-		improveShortcutHelp(target);
-		observer.disconnect();
-	}
-});
-
-function observeShortcutModal({key, target}: KeyboardEvent): void {
-	if (key !== '?' || isEditable(target)) {
+function improveShortcutHelp(columnsContainer: HTMLElement): void {
+	if (shortcutMap.size === 0) {
+		features.unload(import.meta.url);
 		return;
 	}
 
-	const modal = $optional('body > details:not(.js-command-palette-dialog) > details-dialog');
-	if (modal) {
-		observer.observe(modal, {childList: true});
-	}
+	const lastColumn = columnsContainer.lastElementChild!;
+	lastColumn.append(getRghShortcutsContainer(lastColumn.firstElementChild!));
 }
 
-function initOnce(): void {
-	document.body.addEventListener('keypress', observeShortcutModal);
+function init(signal: AbortSignal): void {
+	observe('div[class^="ShortcutsDialog"][class*="ColumnsContainer"]', improveShortcutHelp, {signal});
 }
 
 void features.add(import.meta.url, {
-	init: onetime(initOnce),
+	init,
 });
+
+void features.addCssFeature(import.meta.url);
 
 /*
 

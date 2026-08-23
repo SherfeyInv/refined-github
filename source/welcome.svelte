@@ -1,12 +1,13 @@
 <svelte:options customElement="rgh-welcome" />
 
-<!-- prettier-ignore -->
 <script lang="ts">
+	// eslint-disable-next-line import-x/no-unassigned-import -- Side effects
+	import 'webext-bugs/target-blank';
 	import {onMount} from 'svelte';
 
-	import './helpers/target-blank-polyfill.js';
-	import optionsStorage from './options-storage.js';
 	import {hasValidGitHubComToken} from './github-helpers/github-token.js';
+	import optionsStorage from './options-storage.js';
+	import Header from './options/header.svelte';
 
 	let stepVisible = $state(1);
 	let stepValid = $state(0);
@@ -18,18 +19,22 @@
 			setTimeout(showThirdStep, 2000);
 		} else if (stepValid === 3) {
 			setTimeout(() => {
-				location.replace('https://github.com/refined-github/refined-github/wiki');
+				location.replace(
+					'https://github.com/refined-github/refined-github/wiki',
+				);
 			}, 2000);
 		}
 	});
 
 	$effect(() => {
-		if (tokenInput) {
-			verifyToken();
-
-			// @ts-expect-error TS and its index signatures...
-			optionsStorage.set({personalToken: tokenInput});
+		if (!tokenInput) {
+			return;
 		}
+
+		verifyToken();
+
+		// @ts-expect-error TS and its index signatures...
+		optionsStorage.set({personalToken: tokenInput});
 	});
 
 	const origins = ['https://github.com/*', 'https://gist.github.com/*'];
@@ -63,17 +68,19 @@
 	}
 
 	onMount(async () => {
-		if (await chrome.permissions.contains({origins})) {
-			stepValid = 1;
-			setTimeout(() => {
-				stepVisible = 2;
-			}, 500);
+		if (!(await chrome.permissions.contains({origins}))) {
+			return;
 		}
+
+		stepValid = 1;
+		setTimeout(() => {
+			stepVisible = 2;
+		}, 500);
 	});
 </script>
 
 <main class:dimmed={stepValid === 3}>
-	<rgh-header title="Welcome to Refined GitHub"></rgh-header>
+	<Header title="Welcome to Refined GitHub"></Header>
 
 	<div class="content">
 		<ul>
@@ -98,8 +105,9 @@
 				class="will-show"
 				onclick={showThirdStep}
 			>
+				<!-- Keep this URL in sync with options.html -->
 				<a
-					href="https://github.com/settings/tokens/new?description=Refined%20GitHub&scopes=repo,read:project&default_expires_at=none"
+					href="https://github.com/settings/tokens/new?description=Refined%20GitHub&scopes=repo,read:project,workflow&default_expires_at=none"
 					onclick={markSecondStep}
 				>
 					Generate a token
@@ -122,7 +130,7 @@
 					id="token-input"
 					type="text"
 					size="10"
-					autocomplete="current-password"
+					autocomplete="off"
 					name="personalToken"
 					bind:value={tokenInput}
 				/>
@@ -139,8 +147,8 @@
 			<a
 				class="hidden-link"
 				href="https://github.com/refined-github/refined-github/wiki"
-				target="_self">GitHub</a
-			>…
+				target="_self"
+			>GitHub</a>…
 		</h2>
 	</footer>
 </main>

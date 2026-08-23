@@ -1,32 +1,50 @@
+// eslint-disable-next-line import-x/no-unassigned-import -- Side effects
 import 'webext-dynamic-content-scripts';
-import {globalCache} from 'webext-storage-cache'; // Also needed to regularly clear the cache
-import {addOptionsContextMenu} from 'webext-tools';
-import addPermissionToggle from 'webext-permission-toggle';
-import webextAlert from 'webext-alert';
-import {StorageItem} from 'webext-storage';
+// eslint-disable-next-line import-x/no-unassigned-import -- Side effects
+import 'webext-bugs/options-menu-item';
+import {customizeNoAllUrlsErrorMessage} from 'webext-bugs/no-all-urls';
+import {isSafari} from 'webext-detect';
 import {handleMessages} from 'webext-msg';
+import addPermissionToggle from 'webext-permission-toggle';
+import {StorageItem} from 'webext-storage';
+import {globalCache} from 'webext-storage-cache'; // Also needed to regularly clear the cache
 
-import optionsStorage, {hasToken} from './options-storage.js';
-import isDevelopmentVersion from './helpers/is-development-version.js';
 import {doesBrowserActionOpenOptions} from './helpers/feature-utils.js';
 import {styleHotfixes} from './helpers/hotfix.js';
+import isDevelopmentVersion from './helpers/is-development-version.js';
+import {fetchText} from './helpers/isomorphic-fetch.js';
+import safeCreateTab from './helpers/safe-create-tab.js';
+import optionsStorage, {hasToken} from './options-storage.js';
+import addIdentifyFeatureContextMenu from './options/identify-feature.js';
+import addReloadWithoutContentScripts from './options/reload-without.js';
 
 const {version} = chrome.runtime.getManifest();
 
 const welcomeShown = new StorageItem('welcomed', {defaultValue: false});
 
 // GHE support
-addPermissionToggle();
+if (!isSafari()) {
+	addPermissionToggle();
+}
 
-// Firefox/Safari polyfill
-addOptionsContextMenu();
+// Add "Reload without content scripts" functionality
+addReloadWithoutContentScripts();
+addIdentifyFeatureContextMenu();
+
+// Extend the error message for the "No All URLs" bugfix
+customizeNoAllUrlsErrorMessage(
+	'Refined GitHub is not meant to run on every website. If you’re looking to enable it on GitHub Enterprise, follow the instructions in the Options page.',
+);
 
 handleMessages({
+	async ping(): Promise<string> {
+		return 'pong';
+	},
 	async openUrls(urls: string[], {tab}: chrome.runtime.MessageSender) {
-		for (const [index, url] of urls.entries()) {
-			void chrome.tabs.create({
+		for (const url of urls) {
+			void safeCreateTab({
 				url,
-				index: tab!.index + index + 1,
+				openerTabId: tab!.id,
 				active: false,
 			});
 		}
@@ -34,12 +52,15 @@ handleMessages({
 	async closeTab(_: any, {tab}: chrome.runtime.MessageSender) {
 		void chrome.tabs.remove(tab!.id!);
 	},
-	async fetchJSON(url: string) {
+	fetchText,
+	async fetchJson(url: string) {
 		const response = await fetch(url);
 		return response.json();
 	},
-	async openOptionsPage() {
-		return chrome.runtime.openOptionsPage();
+	async openOptionsPage(hash: string) {
+		return safeCreateTab({
+			url: chrome.runtime.getURL(`assets/options.html${hash && `#${hash}`}`),
+		});
 	},
 	async getStyleHotfixes() {
 		return styleHotfixes.get(version);
@@ -59,7 +80,7 @@ chrome.action.onClicked.addListener(async tab => {
 		return;
 	}
 
-	await chrome.tabs.create({
+	await safeCreateTab({
 		openerTabId: tab.id,
 		url: actionUrl,
 	});
@@ -70,19 +91,19 @@ async function showWelcomePage(): Promise<void> {
 		return;
 	}
 
-	const [token, permissions] = await Promise.all([
+	const [hasStoredToken, hasPermissions] = await Promise.all([
 		hasToken(), // We can't handle an invalid token on a "Welcome" page, so just check whether the user has ever set one
 		chrome.permissions.contains({origins: ['https://github.com/*']}),
 	]);
 
 	try {
-		if (token && permissions) {
+		if (hasStoredToken && hasPermissions) {
 			// Mark as welcomed
 			return;
 		}
 
 		const url = chrome.runtime.getURL('assets/welcome.html');
-		await chrome.tabs.create({url});
+		await safeCreateTab({url});
 	} finally {
 		// Make sure it's always set to true even in case of errors
 		await welcomeShown.set(true);
@@ -94,26 +115,6 @@ chrome.runtime.onInstalled.addListener(async () => {
 		await globalCache.clear();
 	}
 
-	if (await chrome.permissions.contains({origins: ['*://*/*']})) {
-		console.warn('Refined GitHub was granted access to all websites by the user and it’s now been removed. https://github.com/refined-github/refined-github/pull/7407');
-		await chrome.permissions.remove({
-			origins: [
-				'*://*/*',
-			],
-		});
-	}
-
 	// Call after the reset above just in case we nuked Safari's base permissions
 	await showWelcomePage();
-});
-
-chrome.permissions.onAdded.addListener(async permissions => {
-	if (permissions.origins?.includes('*://*/*')) {
-		await chrome.permissions.remove({
-			origins: [
-				'*://*/*',
-			],
-		});
-		await webextAlert('Refined GitHub is not meant to run on every website. If you’re looking to enable it on GitHub Enterprise, follow the instructions in the Options page.');
-	}
 });

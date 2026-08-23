@@ -1,7 +1,7 @@
 import {elementExists} from 'select-dom';
 import type {RequireAtLeastOne} from 'type-fest';
 
-import getCallerID from './caller-id.js';
+import getCallerId from './caller-id.js';
 
 type Position = 'before' | 'after';
 
@@ -19,11 +19,11 @@ export default function attachElement<NewElement extends Element>(
 		after,
 	}: Attachment<NewElement>,
 ): void {
-	const className = 'rgh-' + getCallerID();
 	if (!anchor) {
 		throw new Error('Element not found');
 	}
 
+	const className = 'rgh-attached-' + getCallerId();
 	if (elementExists('.' + className, anchor.parentElement!)) {
 		return;
 	}

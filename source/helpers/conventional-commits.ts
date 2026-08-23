@@ -1,5 +1,5 @@
 // Using https://www.conventionalcommits.org/ as a reference.
-export const conventionalCommitRegex = /^(?<type>\w+)(?:\((?<scope>.+)\))?(?<major>!)?: /;
+export const conventionalCommitRegex = /^(?<type>\w+)(?:\((?<scope>.+?)\))?(?<major>!)?: */;
 
 // Do not send PRs for types not listed here: https://github.com/conventional-changelog/commitlint/tree/master/%40commitlint/config-conventional#rules
 // No more types will be added nor do we accept options.
@@ -17,19 +17,19 @@ const types = new Map([
 	['perf', 'Performance'],
 ]);
 
-export function parseConventionalCommit(commitTitle: string): {
+export function parseConventionalCommit(commitTitle: string): undefined | {
 	rawType: string;
 	type: string;
 	scope?: string;
 	raw: string;
-} | undefined {
+} {
 	const match = conventionalCommitRegex.exec(commitTitle);
 	if (!match?.groups?.type) {
 		return;
 	}
 
 	const {type: rawType, scope, major} = match.groups;
-	const type = types.get(rawType);
+	const type = types.get(rawType.toLowerCase());
 	if (!type) {
 		return;
 	}

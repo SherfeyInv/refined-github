@@ -1,12 +1,42 @@
 import './no-unnecessary-split-diff-view.css';
-
 import * as pageDetect from 'github-url-detection';
+import {$, closestElement, elementExists} from 'select-dom';
 
 import features from '../feature-manager.js';
+import observe from '../helpers/selector-observer.js';
 
-void features.addCssFeature(import.meta.url, [
-	pageDetect.hasFiles,
-]);
+/* TODO [2026-10-01]: remove */
+void features.addCssFeature(import.meta.url);
+
+function manageSplitDiffState(tableBody: HTMLTableSectionElement): void {
+	const table = closestElement('table', tableBody);
+	const columnsGroup = $('colgroup', table);
+	// Diff view is unified
+	if (columnsGroup.childElementCount !== 4) {
+		table.classList.remove('rgh-no-split-diff');
+		return;
+	}
+
+	// Avoid selecting suggested deletions/additions
+	if (!elementExists(':scope > tr > td:nth-child(2) > .deletion', tableBody)) {
+		table.classList.add('rgh-no-split-diff', 'rgh-only-additions');
+	} else if (!elementExists(':scope > tr > td:nth-child(4) > .addition', tableBody)) {
+		table.classList.add('rgh-no-split-diff', 'rgh-only-deletions');
+	}
+}
+
+function init(signal: AbortSignal): void {
+	observe('[class*="DiffLines-module__tableLayoutFixed"] > tbody', manageSplitDiffState, {signal});
+}
+
+void features.add(import.meta.url, {
+	include: [
+		pageDetect.isPR,
+		pageDetect.isCompare,
+		pageDetect.isCommit,
+	],
+	init,
+});
 
 /*
 

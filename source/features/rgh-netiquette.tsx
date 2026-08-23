@@ -1,67 +1,53 @@
-import React from 'dom-chef';
-import InfoIcon from 'octicons-plain-react/Info';
 import * as pageDetect from 'github-url-detection';
+import {mount} from 'svelte';
 
-import createBanner from '../github-helpers/banner.js';
 import features from '../feature-manager.js';
+import {isRefinedGitHubRepo} from '../github-helpers/index.js';
 import observe from '../helpers/selector-observer.js';
-import {isAnyRefinedGitHubRepo} from '../github-helpers/index.js';
-import {getResolvedText, wasClosedLongAgo} from './netiquette.js';
-import TimelineItem from '../github-helpers/timeline-item.js';
+import {getCloseDate, wasLongAgo} from '../github-helpers/netiquette.js';
+import RghNetiquetteBanner from './rgh-netiquette.svelte';
 
-function addConversationBanner(newCommentBox: HTMLElement): void {
-	const button = (
-		<button
-			type="button"
-			className="btn-link"
-			onClick={() => {
+async function addConversationBanner(newCommentBox: HTMLElement): Promise<void> {
+	// Check inside the observer because React views load after dom-ready
+	const closingDate = await getCloseDate();
+	if (!closingDate || !wasLongAgo(closingDate)) {
+		features.unload(import.meta.url);
+		return;
+	}
+
+	mount(RghNetiquetteBanner, {
+		target: newCommentBox.parentElement!,
+		anchor: newCommentBox,
+		props: {
+			closingDate,
+			onReveal() {
 				newCommentBox.hidden = false;
-
-				// Unlink this button
-				button.replaceWith(button.firstChild!);
-
-				// Keep the banner, make it visible
-				// eslint-disable-next-line ts/no-use-before-define -- Cyclic
-				banner.firstElementChild!.classList.replace('rgh-bg-none', 'flash-error');
-
-				window.scrollBy({
-					top: 100,
-					behavior: 'smooth',
-				});
-			}}
-		>comment
-		</button>
-	);
-	const banner = (
-		<TimelineItem>
-			{createBanner({
-				classes: ['rgh-bg-none'],
-				icon: <InfoIcon className="mr-1" />,
-				text: <>{getResolvedText()} If you want to say something helpful, you can leave a {button}. <strong>Do not</strong> report issues here.</>,
-			})}
-		</TimelineItem>
-	);
-	newCommentBox.before(banner);
+				newCommentBox.scrollIntoView({behavior: 'smooth'});
+			},
+		},
+	});
 	newCommentBox.hidden = true;
 }
 
 function init(signal: AbortSignal): void | false {
-	// Do not move to `asLongAs` because those conditions are run before `isConversation`
-	if (!wasClosedLongAgo()) {
-		return false;
-	}
-
-	observe('#issuecomment-new:has(file-attachment)', addConversationBanner, {signal});
+	observe(
+		[
+			'#issuecomment-new:has(file-attachment)',
+			'[data-testid="comment-composer"]',
+		],
+		addConversationBanner,
+		{signal},
+	);
 }
 
 void features.add(import.meta.url, {
 	asLongAs: [
-		isAnyRefinedGitHubRepo,
+		isRefinedGitHubRepo,
 	],
 	include: [
 		pageDetect.isConversation,
 	],
-	awaitDomReady: true, // We're specifically looking for the last event
+	awaitDomReady: true, // The comment field is at the end
 	init,
 });
 

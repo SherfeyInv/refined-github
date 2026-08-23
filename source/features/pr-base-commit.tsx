@@ -1,23 +1,24 @@
 import React from 'dom-chef';
-import {$} from 'select-dom/strict.js';
 import * as pageDetect from 'github-url-detection';
 
+import {elementExists} from 'select-dom';
+
 import features from '../feature-manager.js';
-import observe from '../helpers/selector-observer.js';
-import {getBranches} from '../github-helpers/pr-branches.js';
-import getPrInfo, {type PullRequestInfo} from '../github-helpers/get-pr-info.js';
-import pluralize from '../helpers/pluralize.js';
-import {buildRepoURL} from '../github-helpers/index.js';
 import {linkifyCommit} from '../github-helpers/dom-formatters.js';
+import getPrInfo, {type PullRequestInfo} from '../github-helpers/get-pr-info.js';
+import {buildRepoUrl} from '../github-helpers/index.js';
+import {getBranches} from '../github-helpers/pr-branches.js';
+import {deletedHeadRepository, prMergeabilityBoxCaption} from '../github-helpers/selectors.js';
 import {isTextNodeContaining} from '../helpers/dom-utils.js';
-import {expectToken} from '../github-helpers/github-token.js';
+import pluralize from '../helpers/pluralize.js';
+import observe from '../helpers/selector-observer.js';
 
 function getBaseCommitNotice(prInfo: PullRequestInfo): JSX.Element {
 	const {base} = getBranches();
 	const commit = linkifyCommit(prInfo.baseRefOid);
 	const count = pluralize(prInfo.behindBy, '$$ commit');
 	const countLink = (
-		<a href={buildRepoURL('compare', `${prInfo.baseRefOid.slice(0, 8)}...${base.branch}`)}>
+		<a href={buildRepoUrl('compare', `${prInfo.baseRefOid.slice(0, 8)}...${base.branch}`)}>
 			{count}
 		</a>
 	);
@@ -27,13 +28,6 @@ function getBaseCommitNotice(prInfo: PullRequestInfo): JSX.Element {
 }
 
 async function addInfo(statusMeta: Element): Promise<void> {
-	// This excludes hidden ".status-meta" items without adding this longass selector to the observer
-	// Added: .rgh-update-pr-from-base-branch-row
-	// eslint-disable-next-line no-restricted-syntax -- Selector copied from GitHub. Don't @ me
-	if (!statusMeta.closest('.merge-pr.is-merging .merging-body, .merge-pr.is-merging .merge-commit-author-email-info, .merge-pr.is-merging-solo .merging-body, .merge-pr.is-merging-jump .merging-body, .merge-pr.is-merging-group .merging-body, .merge-pr.is-rebasing .rebasing-body, .merge-pr.is-squashing .squashing-body, .merge-pr.is-squashing .squash-commit-author-email-info, .merge-pr.is-merging .branch-action-state-error-if-merging .merging-body-merge-warning, .rgh-update-pr-from-base-branch-row')) {
-		return;
-	}
-
 	const {base} = getBranches();
 	const prInfo = await getPrInfo(base.relative);
 	if (!prInfo.needsUpdate) {
@@ -42,15 +36,18 @@ async function addInfo(statusMeta: Element): Promise<void> {
 
 	const previousMessage = statusMeta.firstChild!; // Extract now because it won't be the first child anymore
 	statusMeta.prepend(getBaseCommitNotice(prInfo));
-	if (isTextNodeContaining(previousMessage, 'Merging can be performed automatically.')) {
+	// When there are conflicts, GitHub wraps the text in a span, so only attempt removal on text nodes
+	if (previousMessage instanceof Text && isTextNodeContaining(previousMessage, 'Merging can be performed automatically.')) {
 		previousMessage.remove();
 	}
 }
 
 async function init(signal: AbortSignal): Promise<false | void> {
-	await expectToken();
-
-	observe('.branch-action-item .status-meta', addInfo, {signal});
+	observe(
+		prMergeabilityBoxCaption,
+		addInfo,
+		{signal},
+	);
 }
 
 void features.add(import.meta.url, {
@@ -59,9 +56,10 @@ void features.add(import.meta.url, {
 	],
 	exclude: [
 		pageDetect.isClosedConversation,
-		() => $('.head-ref').title === 'This repository has been deleted',
+		() => elementExists(deletedHeadRepository),
 	],
 	awaitDomReady: true, // DOM-based exclusions
+	requiresToken: true,
 	init,
 });
 

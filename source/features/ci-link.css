@@ -1,5 +1,0 @@
-/* The icon appears inside a clickable container, so it must be disabled */
-.AppHeader-context-compact-mainItem .rgh-ci-link {
-	pointer-events: none;
-	margin-left: 0.3em;
-}

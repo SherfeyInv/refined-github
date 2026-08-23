@@ -1,11 +1,12 @@
 import './one-click-pr-or-gist.css';
 
+import cx from 'clsx';
 import React from 'dom-chef';
-import {$$, elementExists} from 'select-dom';
-import {$, $optional} from 'select-dom/strict.js';
 import * as pageDetect from 'github-url-detection';
+import {$, $$, $optional, elementExists} from 'select-dom';
 
 import features from '../feature-manager.js';
+import {withTooltipRef} from '../components/tooltip.js';
 
 function init(): void | false {
 	const initialGroupedButtons = $optional('.BtnGroup:has([name="draft"], [name="gist[public]"])');
@@ -21,7 +22,7 @@ function init(): void | false {
 		let title = $('.select-menu-item-heading', dropdownItem).textContent.trim();
 		const description = $('.description', dropdownItem).textContent.trim();
 		const radioButton = $('input[type=radio]', dropdownItem);
-		const classList = ['btn', 'ml-2', 'tooltipped', 'tooltipped-s'];
+		const classList = ['btn', 'ml-2'];
 
 		if (/\bdraft\b/i.test(title)) {
 			title = 'Create draft PR';
@@ -31,9 +32,9 @@ function init(): void | false {
 
 		initialGroupedButtons.after(
 			<button
+				ref={withTooltipRef(description)}
 				data-disable-invalid
-				className={classList.join(' ')}
-				aria-label={description}
+				className={cx(classList)}
 				type="submit"
 				name={radioButton.name}
 				value={radioButton.value}

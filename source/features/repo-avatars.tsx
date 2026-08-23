@@ -1,9 +1,11 @@
 import React from 'dom-chef';
 import * as pageDetect from 'github-url-detection';
+import cx from 'clsx';
 
 import features from '../feature-manager.js';
-import {getRepo} from '../github-helpers/index.js';
 import getUserAvatar from '../github-helpers/get-user-avatar.js';
+import {getRepo} from '../github-helpers/index.js';
+import {isSmallDevice} from '../helpers/dom-utils.js';
 import observe from '../helpers/selector-observer.js';
 
 async function add(ownerLabel: HTMLElement): Promise<void> {
@@ -11,31 +13,33 @@ async function add(ownerLabel: HTMLElement): Promise<void> {
 	const size = 16;
 	const source = getUserAvatar(username, size)!;
 
-	const avatar = (
+	ownerLabel.parentElement!.classList.add('d-flex', 'flex-items-center');
+
+	ownerLabel.prepend(
 		<img
-			className="avatar ml-1 mr-2"
+			className={cx(
+				'avatar mr-2 tmp-mr-2',
+				!pageDetect.isOrganizationProfile() && 'avatar-user',
+			)}
 			src={source}
 			width={size}
 			height={size}
 			alt={`@${username}`}
-		/>
+		/>,
 	);
-
-	ownerLabel.classList.add('d-flex', 'flex-items-center');
-	ownerLabel.prepend(avatar);
-
-	if (!ownerLabel.closest('[data-hovercard-type="organization"]')) {
-		avatar.classList.add('avatar-user');
-	}
 }
 
 function init(signal: AbortSignal): void {
-	observe('.AppHeader-context-full li:first-child .AppHeader-context-item-label', add, {signal});
+	const username = getRepo()!.owner;
+	observe('.loaded nav[data-component="Breadcrumbs"] a[href="/' + username + '"]', add, {signal});
 }
 
 void features.add(import.meta.url, {
 	include: [
 		pageDetect.hasRepoHeader,
+	],
+	exclude: [
+		isSmallDevice,
 	],
 	init,
 });

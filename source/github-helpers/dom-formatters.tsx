@@ -1,36 +1,57 @@
 import React from 'dom-chef';
-import {elementExists} from 'select-dom';
-import zipTextNodes from 'zip-text-nodes';
-import {applyToLink} from 'shorten-repo-url';
-import {linkifyUrlsToDom} from 'linkify-urls';
 import {linkifyIssuesToDom, type Options as LinkifyIssuesOptions} from 'linkify-issues';
+import {linkifyUrlsToDom} from 'linkify-urls';
+import {closestElementOptional, elementExists} from 'select-dom';
+import {applyToLink} from 'shorten-repo-url';
+import zipTextNodes from 'zip-text-nodes';
 
 import getTextNodes from '../helpers/get-text-nodes.js';
+import {buildRepoUrl, getConversationNumber} from './index.js';
 import parseBackticksCore from './parse-backticks.js';
-import {buildRepoURL} from './index.js';
 
 // Shared class necessary to avoid also shortening the links
-export const linkifiedURLClass = 'rgh-linkified-code';
-const linkifiedURLSelector = '.rgh-linkified-code';
+export const linkifiedUrlClass = 'rgh-linkified-code';
+const linkifiedUrlSelector = '.rgh-linkified-code';
 
 export const codeElementsSelector = [
 	// Sometimes formatted diffs are loaded later and discard our formatting #5870
 	'.blob-code-inner:not(deferred-diff-lines.awaiting-highlight *)', // Code lines
 	':is(.snippet-clipboard-content, .highlight) > pre.notranslate', // Code blocks in comments. May be wrapped twice
+	'.markdown-body code:not(a code, pre code)', // Inline code in comments
+	'.diff-text-inner',
+	'.react-file-line',
 ];
 
 export function shortenLink(link: HTMLAnchorElement): void {
 	// Exclude the link if the closest element found is not `.markdown-body`
 	// This avoids shortening links in code and code suggestions, but still shortens them in review comments
 	// https://github.com/refined-github/refined-github/pull/4759#discussion_r702460890
-	if (link.closest(String([...codeElementsSelector, '.markdown-body']))?.classList.contains('markdown-body')) {
-		applyToLink(link, location.href);
+	if (!closestElementOptional([...codeElementsSelector, '.markdown-body'], link)?.classList.contains('markdown-body')) {
+		return;
+	}
+
+	applyToLink(link, location.href);
+
+	// Customize same-thread links. Already handled by GitHub, but badly
+	// https://github.com/refined-github/refined-github/issues/6057
+	switch (link.textContent) {
+		case `#${getConversationNumber()} (comment)`: {
+			link.textContent = '(earlier comment)';
+			break;
+		}
+
+		case `#${getConversationNumber()} (review)`: {
+			link.textContent = '(earlier review)';
+			break;
+		}
+
+		default:
 	}
 }
 
 export function linkifyIssues(
 	currentRepo: {owner?: string; name?: string},
-	element: Element,
+	element: HTMLElement,
 	options: Partial<LinkifyIssuesOptions> = {},
 ): void {
 	const linkified = linkifyIssuesToDom(element.textContent, {
@@ -39,7 +60,7 @@ export function linkifyIssues(
 		baseUrl: '',
 		...options,
 		attributes: {
-			class: linkifiedURLClass, // Necessary to avoid also shortening the links
+			class: linkifiedUrlClass, // Necessary to avoid also shortening the links
 			...options.attributes,
 		},
 	});
@@ -62,12 +83,12 @@ export function linkifyIssues(
 	zipTextNodes(element, linkified);
 }
 
-export function linkifyURLs(element: Element): void {
+export function linkifyUrls(element: HTMLElement): void {
 	if (element.textContent.length < 15) { // Must be long enough for a URL
 		return;
 	}
 
-	if (elementExists(linkifiedURLSelector, element)) {
+	if (elementExists(linkifiedUrlSelector, element)) {
 		console.warn('Links already exist', element);
 		throw new Error('Links already exist');
 	}
@@ -75,7 +96,7 @@ export function linkifyURLs(element: Element): void {
 	const linkified = linkifyUrlsToDom(element.textContent, {
 		attributes: {
 			rel: 'noreferrer noopener',
-			class: linkifiedURLClass, // Necessary to avoid also shortening the links
+			class: linkifiedUrlClass, // Necessary to avoid also shortening the links
 		},
 	});
 
@@ -102,9 +123,9 @@ export function linkifyCommit(sha: string): JSX.Element {
 		<code>
 			<a
 				className="Link--secondary"
-				href={buildRepoURL('commit', sha)}
+				href={buildRepoUrl('commit', sha)}
 				data-hovercard-type="commit"
-				data-hovercard-url={buildRepoURL('commit', sha, 'hovercard')}
+				data-hovercard-url={buildRepoUrl('commit', sha, 'hovercard')}
 			>
 				{sha.slice(0, 7)}
 			</a>

@@ -1,16 +1,17 @@
-import {CachedFunction} from 'webext-storage-cache';
-import React from 'dom-chef';
-import {$, $optional} from 'select-dom/strict.js';
-import PlayIcon from 'octicons-plain-react/Play';
 import {parseCron} from '@fregante/mi-cron';
+import React from 'dom-chef';
 import * as pageDetect from 'github-url-detection';
+import PlayIcon from 'octicons-plain-react/Play';
+import {$, $optional} from 'select-dom';
+import {CachedFunction} from 'webext-storage-cache';
 
 import features from '../feature-manager.js';
 import api from '../github-helpers/api.js';
 import {cacheByRepo} from '../github-helpers/index.js';
+import removeHashFromUrlBar from '../helpers/history.js';
 import observe from '../helpers/selector-observer.js';
+import {withTooltipRef} from '../components/tooltip.js';
 import GetWorkflows from './github-actions-indicators.gql';
-import {expectToken} from '../github-helpers/github-token.js';
 
 type Workflow = {
 	name: string;
@@ -18,19 +19,9 @@ type Workflow = {
 };
 
 type WorkflowDetails = {
-	schedule?: string;
+	schedules: string[];
 	manuallyDispatchable: boolean;
 };
-
-function addTooltip(element: HTMLElement, tooltip: string): void {
-	const existingTooltip = element.getAttribute('aria-label');
-	if (existingTooltip) {
-		element.setAttribute('aria-label', existingTooltip + '.\n' + tooltip);
-	} else {
-		element.classList.add('tooltipped', 'tooltipped-s');
-		element.setAttribute('aria-label', tooltip);
-	}
-}
 
 // There is no way to get a workflow list in the v4 API #6543
 async function getWorkflows(): Promise<Workflow[]> {
@@ -47,9 +38,10 @@ async function getWorkflows(): Promise<Workflow[]> {
 }
 
 async function getFilesInWorkflowPath(): Promise<Record<string, string>> {
-	const {repository: {workflowFiles}} = await api.v4(GetWorkflows);
+	const {repository} = await api.v4(GetWorkflows);
 
-	const workflows: any[] = workflowFiles?.entries ?? [];
+	// `workflowFiles` is null on empty repos like https://github.com/fregante/empty
+	const workflows: any[] = repository.workflowFiles?.entries ?? [];
 
 	const result: Record<string, string> = {};
 	for (const workflow of workflows) {
@@ -69,15 +61,16 @@ const workflowDetails = new CachedFunction('workflows-details', {
 			const workflowYaml = workflowFiles[workflow.name];
 
 			if (workflowYaml === undefined) {
-				// Cannot find workflow yaml; workflow removed.
+				// Cannot find workflow YAML; workflow removed.
 				continue;
 			}
 
-			// Single-line regex, allows comments around
-			const cron = /^(?: {4}|\t\t)-\s*cron[:\s'"]+([^'"\n]+)/m.exec(workflowYaml);
+			const crons = [...workflowYaml.matchAll(/^(?: {4}|\t\t)-\s*cron[\s"':]+(?<cron>[^\n"']+)/gm)].map(match =>
+				match.groups!.cron,
+			);
 			details[workflow.name] = {
 				...workflow,
-				schedule: cron?.[1],
+				schedules: crons,
 				manuallyDispatchable: workflowYaml.includes('workflow_dispatch:'),
 			};
 		}
@@ -89,53 +82,83 @@ const workflowDetails = new CachedFunction('workflows-details', {
 	cacheKey: cacheByRepo,
 });
 
-async function addIndicators(workflowListItem: HTMLAnchorElement): Promise<void> {
+async function addIndicators(workflowLink: HTMLAnchorElement): Promise<void> {
 	// Called in `init`, memoized
 	const workflows = await workflowDetails.get();
-	const workflowName = workflowListItem.href.split('/').pop()!;
+	const workflowName = workflowLink.href.split('/').pop()!;
 	const workflow = workflows[workflowName];
 	if (!workflow) {
 		return;
 	}
 
-	const svgTrailer = $optional('.ActionListItem-visual--trailing', workflowListItem)
-		?? <div className="ActionListItem-visual--trailing" />;
-	if (!svgTrailer.isConnected) {
-		workflowListItem.append(svgTrailer);
+	if (workflow.manuallyDispatchable && workflowLink.pathname !== location.pathname) {
+		if (workflowLink.nextElementSibling) {
+			// User can trigger the workflow
+			const url = new URL(workflowLink.href);
+			url.hash = 'rgh-run-workflow';
+			workflowLink.after(
+				<a
+					ref={withTooltipRef({label: 'Trigger manually', direction: 'sw'})}
+					href={url.href}
+					data-turbo-frame={workflowLink.dataset.turboFrame}
+					// `actions-unpin-button` provides the hover style
+					className="Button Button--iconOnly Button--invisible Button--medium color-bg-transparent actions-unpin-button"
+				>
+					<PlayIcon />
+				</a>,
+			);
+		} else {
+			// User cannot trigger the workflow
+			const indicator = (
+				<div
+					ref={withTooltipRef({label: 'This workflow can be triggered manually', direction: 'sw'})}
+					className="ActionListItem-visual ActionListItem-visual--trailing"
+					style={{pointerEvents: 'initial'}}
+				>
+					<PlayIcon />
+				</div>
+			);
+			const pinIcon = $optional('.ActionListItem-visual--trailing', workflowLink);
+			if (pinIcon) {
+				// Enable tooltip
+				pinIcon.style.pointerEvents = 'auto';
+				// Add spacing between the icons
+				pinIcon.classList.add('gap-2');
+				pinIcon.prepend(indicator);
+			} else {
+				workflowLink.append(indicator);
+			}
+		}
 	}
 
-	svgTrailer.classList.add('m-auto', 'd-flex', 'gap-2');
-
-	if (workflow.manuallyDispatchable) {
-		svgTrailer.append(<PlayIcon className="m-auto" />);
-		addTooltip(workflowListItem, 'This workflow can be triggered manually');
+	let nextTime: Date | undefined;
+	for (const schedule of workflow.schedules) {
+		const time = parseCron.nextDate(schedule);
+		if (time && (!nextTime || time < nextTime)) {
+			nextTime = time;
+		}
 	}
 
-	if (!workflow.schedule) {
-		return;
-	}
-
-	const nextTime = parseCron.nextDate(workflow.schedule);
 	if (!nextTime) {
 		return;
 	}
 
-	const relativeTime = <relative-time datetime={String(nextTime)} />;
-	$('.ActionListItem-label', workflowListItem).append(
+	$('.ActionListItem-label', workflowLink).append(
 		<em>
-			({relativeTime})
+			(<relative-time datetime={String(nextTime)} />)
 		</em>,
 	);
-
-	setTimeout(() => {
-		// The content of `relative-time` might is not immediately available
-		addTooltip(workflowListItem, `Next run: ${relativeTime.shadowRoot!.textContent}`);
-	}, 500);
 }
 
 async function init(signal: AbortSignal): Promise<false | void> {
-	await expectToken();
 	observe('a.ActionListContent', addIndicators, {signal});
+}
+
+function openRunWorkflow(): void {
+	removeHashFromUrlBar();
+	// Note that the attribute is removed after the first opening, so the selector only matches it once
+	const dropdown = $('details[data-deferred-details-content-url*="/actions/manual?workflow="]');
+	dropdown.open = true;
 }
 
 void features.add(import.meta.url, {
@@ -143,7 +166,14 @@ void features.add(import.meta.url, {
 		pageDetect.isRepositoryActions,
 		async () => Boolean(await workflowDetails.get()),
 	],
+	requiresToken: true,
 	init,
+}, {
+	include: [
+		() => location.hash === '#rgh-run-workflow',
+	],
+	awaitDomReady: true,
+	init: openRunWorkflow,
 });
 
 /*

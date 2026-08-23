@@ -1,46 +1,42 @@
-/* Hide "About" header */
-[rgh-clean-repo-sidebar] .Layout-sidebar .BorderGrid-row:first-child h2 {
-	display: none;
-}
-
-/* Hide "Packages" if empty */
-[rgh-clean-repo-sidebar]
-	.BorderGrid-row:has(a[href*='/packages?repo_name'] .Counter[title='0']) {
-	display: none;
-}
-
-/* Align the top of the repo root sidebar with the main page content */
-[rgh-clean-repo-sidebar] .Layout-sidebar .BorderGrid-row:first-child h2 + p.f4 {
-	margin-top: 0 !important;
-}
-
-@media (width >= 768px) {
-	/* Hide "Releases" header */
-	[rgh-clean-repo-sidebar] .Layout-sidebar h2 [href$='/releases'] {
+[rgh-clean-repo-sidebar] [class*='PageLayout-Pane'] {
+	/* Hide "About" header */
+	.BorderGrid-row:first-child h2 {
 		display: none;
 	}
 
-	/* Align data section with latest tag/release link #5428 */
-	[rgh-clean-repo-sidebar] .Layout-sidebar .Link--muted .octicon {
-		margin-right: 4px !important;
+	/* Hide "Packages" if empty */
+	.BorderGrid-row:has(a[href*='/packages?repo_name'] .Counter[title='0']) {
+		display: none;
 	}
-}
 
-/*
- * Hide "+ 65 releases" link
- * Hide "Learn more about GitHub Sponsors" link
- * Hide "+ 123 contributors" link
- */
-[rgh-clean-repo-sidebar] .Layout-sidebar .BorderGrid-cell > .mt-3 {
-	display: none;
-}
+	/* Align the top of the repo root sidebar with the main page content */
+	.BorderGrid-row:first-child h2 + p.f4 {
+		margin-top: 0 !important;
+	}
 
-/* Hide Code of conduct links */
-[rgh-clean-repo-sidebar]
-	.Layout-sidebar
-	.Link--muted:is(
+	@media (width >= 768px) {
+		/* Align data section with latest tag/release link #5428 */
+		.Link--muted .octicon {
+			margin-right: 4px !important;
+		}
+	}
+
+	/*
+	 * Hide "+ 65 releases" link
+	 * Hide "Learn more about GitHub Sponsors" link
+	 * Hide "+ 123 contributors" link
+	 * Don't hide "Create new release" link #8442
+	 */
+	.BorderGrid-cell
+		> div:is(.tmp-mt-3, .mt-3):has(> a:not([href$='releases/new'])) {
+		display: none;
+	}
+
+	/* Hide Code of conduct links */
+	.Link--muted {
 		[href$='/code-of-conduct.md' i],
-		[href$='/code_of_conduct.md' i]
-	) {
-	display: none;
+		[href$='/code_of_conduct.md' i] {
+			display: none;
+		}
+	}
 }

@@ -1,39 +1,31 @@
-import {$, $optional} from 'select-dom/strict.js';
-import {setFetch} from 'push-form';
-// Nodes may be exactly `null`
-import type {Nullable} from 'vitest';
+import {$, $$, $optional, ElementNotFoundError} from 'select-dom';
 
-// `content.fetch` is Firefox’s way to make fetches from the page instead of from a different context
-// This will set the correct `origin` header without having to use XMLHttpRequest
-// https://stackoverflow.com/questions/47356375/firefox-fetch-api-how-to-omit-the-origin-header-in-the-request
-// https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Content_scripts#XHR_and_Fetch
-if (globalThis.content?.fetch) {
-	setFetch(globalThis.content.fetch);
-}
+// eslint-disable-next-line @typescript-eslint/no-restricted-types -- Nodes may be exactly `null`
+type Nullable<T> = T | null;
 
 /**
- * Append to an element, but before a element that might not exist.
- * @param  parent  Element (or its selector) to which append the `child`
- * @param  before  Selector of the element that `child` should be inserted before
- * @param  child   Element to append
- * @example
- *
- * <parent>
- *   <yes/>
- *   <oui/>
- *   <nope/>
- * </parent>
- *
- * appendBefore('parent', 'nope', <sì/>);
- *
- * <parent>
- *   <yes/>
- *   <oui/>
- *   <sì/>
- *   <nope/>
- * </parent>
+ Append to an element, but before a element that might not exist.
+ @param parent Element (or its selector) to which append the `child`
+ @param before Selector of the element that `child` should be inserted before
+ @param child Element to append
+ @example
+
+ <parent>
+	<yes/>
+	<oui/>
+	<nope/>
+ </parent>
+
+ appendBefore('parent', 'nope', <sì/>);
+
+ <parent>
+  <yes/>
+  <oui/>
+  <sì/>
+  <nope/>
+ </parent>
  */
-export const appendBefore = (parent: string | Element, before: string, child: Element): void => {
+export const appendBefore = (parent: string | Element, before: string, child: Node): void => {
 	if (typeof parent === 'string') {
 		parent = $(parent);
 	}
@@ -59,23 +51,15 @@ export const wrapAll = <Wrapper extends Element>(wrapper: Wrapper, ...targets: A
 	return wrapper;
 };
 
-export const isEditable = (node: unknown): boolean => node instanceof HTMLTextAreaElement
+export const isEditable = (node: unknown): boolean =>
+	node instanceof HTMLTextAreaElement
 	|| node instanceof HTMLInputElement
 	|| (node instanceof HTMLElement && node.isContentEditable);
 
-export const frame = async (): Promise<number> => new Promise(resolve => {
-	requestAnimationFrame(resolve);
-});
-
-export const highlightTab = (tabElement: Element): void => {
-	tabElement.classList.add('selected');
-	tabElement.setAttribute('aria-current', 'page');
-};
-
-export const unhighlightTab = (tabElement: Element): void => {
-	tabElement.classList.remove('selected');
-	tabElement.removeAttribute('aria-current');
-};
+export const frame = async (): Promise<number> =>
+	new Promise(resolve => {
+		requestAnimationFrame(resolve);
+	});
 
 const matchString = (matcher: RegExp | string, string: string): boolean =>
 	typeof matcher === 'string' ? matcher === string : matcher.test(string);
@@ -115,4 +99,32 @@ export const removeTextNodeContaining = (node: Text | ChildNode, expectation: Re
 export function removeTextInTextNode(node: Text | ChildNode, text: RegExp | string): void {
 	assertNodeContent(node, text);
 	node.textContent = node.textContent.replace(text, '');
+}
+
+export function getElementByAriaLabelledBy<T extends HTMLElement>(baseSelector: string, label: string): T {
+	for (const element of $$(baseSelector + '[aria-labelledby]')) {
+		const labelElement = $optional(`[id="${element.getAttribute('aria-labelledby')!}"]`);
+
+		if (labelElement?.textContent?.trim() === label) {
+			return element as T;
+		}
+	}
+
+	throw new ElementNotFoundError(`Expected element labelled "${label}" not found in: ${baseSelector}`);
+}
+
+export function getClasses(element: Element): Set<string> {
+	const list = new Set<string>();
+	for (const cls of element.classList) {
+		if (!cls.startsWith('rgh-')) {
+			list.add(cls);
+		}
+	}
+
+	return list;
+}
+
+const _isSmallDevice = screen.width < 500;
+export function isSmallDevice(): boolean {
+	return _isSmallDevice;
 }

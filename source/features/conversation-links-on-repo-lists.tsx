@@ -1,15 +1,15 @@
 import React from 'dom-chef';
-import {$, $optional} from 'select-dom/strict.js';
 import * as pageDetect from 'github-url-detection';
 import GitPullRequestIcon from 'octicons-plain-react/GitPullRequest';
 import IssueOpenedIcon from 'octicons-plain-react/IssueOpened';
+import {$, $optional, closestElement} from 'select-dom';
 
 import features from '../feature-manager.js';
-import observe from '../helpers/selector-observer.js';
 import {assertNodeContent} from '../helpers/dom-utils.js';
+import observe from '../helpers/selector-observer.js';
 
 function addConversationLinks(repositoryLink: HTMLAnchorElement): void {
-	const repository = repositoryLink.closest('li')!;
+	const repository = closestElement('li', repositoryLink);
 
 	// Remove the "X issues need help" link
 	$optional('[href*="issues?q=label%3A%22help+wanted"]', repository)?.remove();
@@ -19,61 +19,46 @@ function addConversationLinks(repositoryLink: HTMLAnchorElement): void {
 		$('relative-time', repository).previousSibling,
 		'Updated',
 	).before(
-		<>
-			<a
-				className="Link--muted mr-3"
-				href={repositoryLink.href + '/issues'}
-			>
-				<IssueOpenedIcon />
-			</a>
-			<a
-				className="Link--muted mr-3"
-				href={repositoryLink.href + '/pulls'}
-			>
-				<GitPullRequestIcon />
-			</a>
-		</>,
+		<a
+			className="Link--muted mr-3 tmp-mr-3"
+			href={repositoryLink.href + '/issues'}
+		>
+			<IssueOpenedIcon />
+		</a>,
+		<a
+			className="Link--muted mr-3 tmp-mr-3"
+			href={repositoryLink.href + '/pulls'}
+		>
+			<GitPullRequestIcon />
+		</a>,
 	);
 }
 
-function addSearchConversationLinks(repositoryLink: HTMLAnchorElement): void {
-	// Do not move to `includes` until React AJAX issues are resolved:
-	// https://github.com/refined-github/refined-github/pull/7524#issuecomment-2211692096
-	// https://github.com/refined-github/refined-github/issues/6554
-	if (new URLSearchParams(location.search).get('type') !== 'repositories') {
-		return;
-	}
-
-	// Place before the update date ·
-	repositoryLink
-		.closest('[data-testid="results-list"] > div')!
-		.querySelector('ul > span:last-of-type')!
-		.before(
-			<>
-				<span
-					aria-hidden="true"
-					className="color-fg-muted mx-2"
-				>
-					·
-				</span>
-				<li className="d-flex text-small">
-					<a
-						className="Link--muted"
-						href={repositoryLink.href + '/issues'}
-					>
-						<IssueOpenedIcon />
-					</a>
-				</li>
-				<li className="d-flex text-small ml-2">
-					<a
-						className="Link--muted"
-						href={repositoryLink.href + '/pulls'}
-					>
-						<GitPullRequestIcon />
-					</a>
-				</li>
-			</>,
-		);
+function addSearchConversationLinks(stargazersLink: HTMLAnchorElement): void {
+	closestElement('li', stargazersLink).after(
+		<span
+			aria-hidden="true"
+			className="color-fg-muted mx-2 tmp-mx-2"
+		>
+			·
+		</span>,
+		<li className="d-flex text-small">
+			<a
+				className="Link--muted"
+				href={stargazersLink.href + '/issues'}
+			>
+				<IssueOpenedIcon />
+			</a>
+		</li>,
+		<li className="d-flex text-small ml-2 tmp-ml-2">
+			<a
+				className="Link--muted"
+				href={stargazersLink.href + '/pulls'}
+			>
+				<GitPullRequestIcon />
+			</a>
+		</li>,
+	);
 }
 
 function init(signal: AbortSignal): void {
@@ -81,7 +66,7 @@ function init(signal: AbortSignal): void {
 }
 
 function initSearch(signal: AbortSignal): void {
-	observe('.search-title a', addSearchConversationLinks, {signal});
+	observe('a[class^="Repositories-module__stargazersLink"]', addSearchConversationLinks, {signal});
 }
 
 void features.add(import.meta.url, {
@@ -90,8 +75,9 @@ void features.add(import.meta.url, {
 	],
 	init,
 }, {
-	include: [
+	asLongAs: [
 		pageDetect.isGlobalSearchResults,
+		() => new URLSearchParams(location.search).get('type') === 'repositories',
 	],
 	init: initSearch,
 });

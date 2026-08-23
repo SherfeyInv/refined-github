@@ -1,18 +1,26 @@
 import * as pageDetect from 'github-url-detection';
 
+import delay from '../helpers/delay.js';
 import features from '../feature-manager.js';
 
-function maybeCleanUrl(event?: NavigateEvent): void {
-	const parsed = new URL(event?.destination.url ?? location.href);
-	if (parsed.searchParams.get('tab') === 'readme-ov-file') {
-		parsed.searchParams.delete('tab');
-		history.replaceState(history.state, '', parsed.href);
+async function maybeCleanUrl(): Promise<void> {
+	const parsed = new URL(location.href);
+	if (parsed.searchParams.get('tab') !== 'readme-ov-file') {
+		return;
 	}
+
+	// GitHub has some delayed logic to deal with this internally
+	// https://github.com/refined-github/refined-github/issues/9908
+	await delay(500);
+	parsed.searchParams.delete('tab');
+	history.replaceState(history.state, '', parsed.href);
 }
 
 function init(signal: AbortSignal): void {
-	maybeCleanUrl();
-	globalThis.navigation?.addEventListener('navigate', maybeCleanUrl, {signal});
+	void maybeCleanUrl();
+
+	// TODO [2027-01-01]: Only needed to avoid breaking on Safari <26.2 (<2026)
+	navigation?.addEventListener('navigatesuccess', maybeCleanUrl, {signal});
 }
 
 void features.add(import.meta.url, {

@@ -1,42 +1,51 @@
-import {$$} from 'select-dom';
-import {$} from 'select-dom/strict.js';
 import {onAbort} from 'abort-utils';
-import * as pageDetect from 'github-url-detection';
-import debounceFn from 'debounce-fn';
 import delegate, {type DelegateEvent} from 'delegate-it';
+import * as pageDetect from 'github-url-detection';
+import {$, $$, closestElement, elementExists} from 'select-dom';
 
 import features from '../feature-manager.js';
-import clickAll from '../helpers/click-all.js';
 import showToast from '../github-helpers/toast.js';
+import clickAll from '../helpers/click-all.js';
+import {is} from '../helpers/css-selectors.js';
 import getItemsBetween from '../helpers/get-items-between.js';
 
-let previousFile: HTMLElement | undefined;
-let runningBatch = false;
+export const viewedToggleSelector = [
+	'button[class*="MarkAsViewedButton"]',
+	// Old view
+	'input.js-reviewed-checkbox',
+] as const;
+const fileSelector = [
+	'[class^="Diff-module__diffTargetable"]',
+	// Old view
+	'.js-file',
+] as const;
+// New view, Old view
+const checkedSelector = is(
+	':has(.octicon-checkbox-fill)',
+	'[checked]',
+);
 
-function remember(event: DelegateEvent): void {
-	// Only remember if the user clicked it. `isTrusted` doesn't work because `remember` is called on a fake `submit` event
-	if (!runningBatch) {
-		previousFile = event.delegateTarget.closest('.js-file')!;
-	}
+let previousFile: HTMLElement | undefined;
+
+function remember(event: DelegateEvent<MouseEvent, HTMLElement>): void {
+	previousFile = closestElement(fileSelector, event.delegateTarget);
 }
 
 function isChecked(file: HTMLElement): boolean {
-	return file.querySelector('input.js-reviewed-checkbox')!.checked;
+	const viewedToggle = $(viewedToggleSelector, file);
+
+	return viewedToggle instanceof HTMLInputElement
+		? viewedToggle.checked
+		: elementExists('.octicon-checkbox-fill', viewedToggle);
 }
 
-// A single click is somehow causing two separate trusted `click` events, so it needs to be debounced
-const batchToggle = debounceFn((event: DelegateEvent<MouseEvent, HTMLFormElement>): void => {
-	if (!event.shiftKey) {
-		return;
-	}
-
+function batchToggle(event: DelegateEvent<MouseEvent, HTMLElement>): void {
 	event.stopImmediatePropagation();
 
-	const files = $$('.js-file');
-	const thisFile = event.delegateTarget.closest('.js-file')!;
-	const isThisBeingFileChecked = !isChecked(thisFile); // Flip it because the value hasn't changed yet
+	const files = $$(fileSelector);
+	const thisFile = closestElement(fileSelector, event.delegateTarget);
+	const isThisBeingFileChecked = isChecked(thisFile);
 
-	runningBatch = true;
 	const selectedFiles = getItemsBetween(files, previousFile, thisFile);
 	for (const file of selectedFiles) {
 		if (
@@ -46,54 +55,48 @@ const batchToggle = debounceFn((event: DelegateEvent<MouseEvent, HTMLFormElement
 			&& file.checkVisibility()
 			&& isChecked(file) !== isThisBeingFileChecked
 		) {
-			$('.js-reviewed-checkbox', file).click();
+			$(viewedToggleSelector, file).click();
 		}
 	}
+}
 
-	runningBatch = false;
-}, {
-	before: true,
-	after: false,
-});
-
-function markAsViewedSelector(target: HTMLElement): string {
-	const checked = isChecked(target) ? ':not([checked])' : '[checked]';
+function markAsViewedSelector(file: HTMLElement): string {
+	const checkedState = isChecked(file) ? `:not(${checkedSelector})` : checkedSelector;
 	// The `hidden` attribute excludes filtered-out files
 	// https://github.com/refined-github/refined-github/issues/7819
-	return '.file:not([hidden]) .js-reviewed-checkbox' + checked;
+	return is(fileSelector) + ':not([hidden]) ' + is(viewedToggleSelector) + checkedState;
 }
 
 const markAsViewed = clickAll(markAsViewedSelector);
 
-// A single click is somehow causing two separate trusted `click` events, so it needs to be debounced
-const onAltClick = debounceFn((event: DelegateEvent<MouseEvent, HTMLInputElement>): void => {
-	if (!event.altKey || !event.isTrusted) {
-		return;
-	}
+function onAltClick(event: DelegateEvent<MouseEvent, HTMLElement>): void {
+	const file = closestElement(fileSelector, event.delegateTarget);
+	const newState = isChecked(file) ? 'viewed' : 'unviewed';
 
-	const newState = isChecked(event.delegateTarget) ? 'unviewed' : 'viewed';
 	void showToast(async () => {
 		markAsViewed(event);
 	}, {
 		message: `Marking visible files as ${newState}`,
 		doneMessage: `Files marked as ${newState}`,
 	});
-}, {
-	before: true,
-	after: false,
-});
+}
 
-function avoidSelectionOnShiftClick(event: MouseEvent): void {
-	if (event.shiftKey) {
-		event.preventDefault();
+function handleClick(event: DelegateEvent<MouseEvent, HTMLElement>): void {
+	if (!event.isTrusted) {
+		return;
 	}
+
+	if (event.altKey) {
+		onAltClick(event);
+	} else if (event.shiftKey) {
+		batchToggle(event);
+	}
+
+	remember(event);
 }
 
 function init(signal: AbortSignal): void {
-	delegate('.js-reviewed-toggle', 'click', onAltClick, {signal});
-	delegate('.js-reviewed-toggle', 'click', batchToggle, {signal});
-	delegate('.js-reviewed-toggle', 'mousedown', avoidSelectionOnShiftClick, {signal});
-	delegate('.js-toggle-user-reviewed-file-form', 'submit', remember, {signal});
+	delegate(viewedToggleSelector, 'click', handleClick, {signal});
 	onAbort(signal, () => {
 		previousFile = undefined;
 	});
@@ -102,6 +105,10 @@ function init(signal: AbortSignal): void {
 void features.add(import.meta.url, {
 	include: [
 		pageDetect.isPRFiles,
+	],
+	exclude: [
+		pageDetect.isPRFile404,
+		pageDetect.isPRCommit,
 	],
 	init,
 });

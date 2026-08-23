@@ -1,5 +1,5 @@
-const queryPartsRegExp = /(?:[^\s"]|"[^"]*")+/g;
-const labelLinkRegex = /^(?:\/[^/]+){2}\/labels\/([^/]+)\/?$/;
+const queryPartsRegExp = /[^\s"()]+:[^\s"()]*(?:"[^"]*")?|\([^)]*\)|"[^"]*"|[^\s"():]+/g;
+const labelLinkRegex = /^(?:\/[^/]+){2}\/labels\/(?<label>[^/]+)\/?$/;
 
 function splitQueryString(query: string): string[] {
 	return query.match(queryPartsRegExp) ?? [];
@@ -9,7 +9,7 @@ function splitQueryString(query: string): string[] {
 function deduplicateKeywords(array: string[], ...keywords: string[]): string[] {
 	const deduplicated = [];
 	let wasKeywordFound = false;
-	for (const current of [...array].reverse()) {
+	for (const current of array.toReversed()) {
 		const isKeyword = keywords.includes(current);
 		if (!isKeyword || !wasKeywordFound) {
 			deduplicated.unshift(current);
@@ -62,19 +62,19 @@ export default class SearchQuery {
 		}
 
 		// Parse label links #5176
-		const labelName = labelLinkRegex.exec(this.url.pathname)?.[1];
+		const labelName = labelLinkRegex.exec(this.url.pathname)?.groups?.label;
 		if (labelName) {
-			this.queryParts = ['is:open', 'label:' + SearchQuery.escapeValue(decodeURIComponent(labelName))];
+			this.queryParts = ['state:open', 'label:' + SearchQuery.escapeValue(decodeURIComponent(labelName))];
 			return;
 		}
 
 		// Query-less URLs imply some queries.
 		// When we explicitly set ?q=* they're overridden, so they need to be manually added again.
 
-		// Repo example: is:issue is:open
-		this.queryParts.push(/\/pulls\/?$/.test(this.url.pathname) ? 'is:pr' : 'is:issue', 'is:open');
+		// Repo example: is:issue state:open
+		this.queryParts.push(/\/pulls\/?$/.test(this.url.pathname) ? 'is:pr' : 'is:issue', 'state:open');
 
-		// Header nav example: is:open is:issue author:you archived:false
+		// Header nav example: state:open is:issue author:you archived:false
 		if (this.url.pathname === '/issues' || this.url.pathname === '/pulls') {
 			if (this.url.searchParams.has('user')) { // #1211
 				this.queryParts.push('user:' + this.url.searchParams.get('user')!);
@@ -104,7 +104,7 @@ export default class SearchQuery {
 	}
 
 	get href(): string {
-		this.url.searchParams.set('q', this.get());
+		this.url.searchParams.set('q', this.get() + ' ');
 		if (labelLinkRegex.test(this.url.pathname)) {
 			// Avoid a redirection to the conversation list that would drop the search query #5176
 			this.url.pathname = this.url.pathname.replace(/\/labels\/.+$/, '/issues');

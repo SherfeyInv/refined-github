@@ -1,19 +1,28 @@
 import './conversation-authors.css';
 
-import {CachedFunction} from 'webext-storage-cache';
-import {$$} from 'select-dom';
 import * as pageDetect from 'github-url-detection';
+import {CachedFunction} from 'webext-storage-cache';
+import {assertError} from 'ts-extras';
 
 import features from '../feature-manager.js';
-import fetchDom from '../helpers/fetch-dom.js';
-import {buildRepoURL, cacheByRepo, getUsername} from '../github-helpers/index.js';
+import api from '../github-helpers/api.js';
+import {cacheByRepo, getLoggedInUser} from '../github-helpers/index.js';
 import observe from '../helpers/selector-observer.js';
+import GetCollaborators from './conversation-authors.gql';
 
 const collaborators = new CachedFunction('repo-collaborators', {
 	async updater(): Promise<string[]> {
-		const dom = await fetchDom(buildRepoURL('issues/show_menu_content?partial=issues/filters/authors_content'));
-		return $$('.SelectMenu-item img[alt]', dom)
-			.map(avatar => avatar.alt.slice(1));
+		try {
+			const {repository} = await api.v4(GetCollaborators);
+			return repository.collaborators.nodes.map((user: Record<string, string>) => user.login);
+		} catch (error) {
+			assertError(error);
+			if (error.message.includes('You do not have permission to view repository collaborators')) {
+				return [];
+			}
+
+			throw error;
+		}
 	},
 	maxAge: {days: 1},
 	staleWhileRevalidate: {days: 20},
@@ -22,11 +31,9 @@ const collaborators = new CachedFunction('repo-collaborators', {
 
 async function highlightCollaborators(signal: AbortSignal): Promise<void> {
 	const list = await collaborators.get();
-	observe([
-		'.js-issue-row [data-hovercard-type="user"]',
-		'a[class^="issue-item-module__authorCreatedLink"]',
-	], author => {
-		if (list.includes(author.textContent.trim())) {
+	observe('a[class^="IssueItem-module__authorCreatedLink"]', author => {
+		const name = author.textContent.trim();
+		if (list.includes(name) && name !== getLoggedInUser()) {
 			author.classList.add('rgh-collaborator');
 		}
 	}, {signal});
@@ -34,16 +41,22 @@ async function highlightCollaborators(signal: AbortSignal): Promise<void> {
 
 function highlightSelf(signal: AbortSignal): void {
 	// "Opened by {user}" and "Created by {user}"
-	observe(`.opened-by a[title$="ed by ${CSS.escape(getUsername()!)}"]`, author => {
-		author.classList.add('rgh-collaborator');
-		author.style.fontStyle = 'italic';
+	observe([
+		// TODO [2027-01-01]: Drop after the legacy PR Files view is gone
+		`.opened-by a[title$="ed by ${CSS.escape(getLoggedInUser()!)}"]`,
+		`a[class^="IssueItem-module__authorCreatedLink"][data-hovercard-url="/users/${
+			CSS.escape(getLoggedInUser()!)
+		}/hovercard"]`,
+	], author => {
+		author.classList.add('rgh-own-conversation');
 	}, {signal});
 }
 
 void features.add(import.meta.url, {
 	include: [
-		pageDetect.isRepoIssueOrPRList,
+		pageDetect.isRepoIssueList,
 	],
+	requiresToken: true,
 	init: highlightCollaborators,
 }, {
 	include: [
@@ -57,6 +70,6 @@ void features.add(import.meta.url, {
 Test URLs:
 
 https://github.com/issues
-https://github.com/refined-github/refined-github/pulls
+https://github.com/refined-github/refined-github/issues
 
 */

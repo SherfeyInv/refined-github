@@ -1,8 +1,8 @@
 import React from 'dom-chef';
-import {assertError} from 'ts-extras';
 import CheckIcon from 'octicons-plain-react/Check';
 import StopIcon from 'octicons-plain-react/Stop';
 import oneEvent from 'one-event';
+import {assertError} from 'ts-extras';
 
 import delay from '../helpers/delay.js';
 import {frame} from '../helpers/dom-utils.js';
@@ -16,6 +16,7 @@ function ToastSpinner(): JSX.Element {
 	);
 }
 
+type ToastMessage = string | JSX.Element;
 type ProgressCallback = (message: string) => void;
 type Task = Promise<unknown> | ((progress: ProgressCallback) => Promise<unknown>);
 export default async function showToast(
@@ -25,36 +26,47 @@ export default async function showToast(
 		doneMessage = 'Bulk action processing complete.',
 	}: {
 		message?: string;
-		doneMessage?: string | false;
+		doneMessage?: ToastMessage | false;
 	} = {},
 ): Promise<void> {
-	const iconWrapper = <span className="Toast-icon"><ToastSpinner /></span>;
+	const iconWrapper = <span className="Toast-icon">
+		<ToastSpinner />
+	</span>;
 	const messageWrapper = <span>{message}</span>;
 	const toast = (
 		<div
 			role="log"
 			style={{zIndex: 101}}
-			className="rgh-toast position-fixed bottom-0 right-0 ml-5 mb-5 Toast Toast--loading Toast--animateIn"
+			className="rgh-toast position-fixed bottom-0 right-0 ml-5 tmp-ml-5 mb-5 tmp-mb-5 Toast Toast--loading Toast--animateIn"
 		>
 			{iconWrapper}
-			<span className="Toast-content py-2">
+			<span className="Toast-content py-2 tmp-py-2">
 				<div style={{fontSize: '10px', color: 'silver', marginBottom: '-0.3em'}}>Refined GitHub</div>
 				{messageWrapper}
 			</span>
 		</div>
 	);
-	const updateToast = (message: string): void => {
-		messageWrapper.textContent = message;
+	let lastRawMessage: ToastMessage = message;
+	const updateToast = (newMessage: ToastMessage): void => {
+		lastRawMessage = newMessage;
+		messageWrapper.textContent = '';
+		messageWrapper.append(newMessage);
 	};
 
-	const finalUpdateToast = async (message: string): Promise<void> => {
-		updateToast(message);
+	const finalUpdateToast = async (newMessage: ToastMessage | Error): Promise<void> => {
+		if (newMessage instanceof Error && 'richMessage' in newMessage && newMessage.richMessage) {
+			newMessage = newMessage.richMessage as ToastMessage;
+		} else if (newMessage instanceof Error) {
+			newMessage = newMessage.message;
+		}
+
+		updateToast(newMessage);
 
 		// Without rAF the toast might be removed before the first page paint
 		// rAF also allows showToast to resolve as soon as task is done
 		await frame();
 
-		const displayTime = message.split(' ').length * 300 + 2000;
+		const displayTime = (typeof newMessage === 'string' ? newMessage.split(' ').length * 300 : 3000) + 2000;
 		await delay(displayTime);
 
 		// Display time is over, animate out
@@ -66,7 +78,6 @@ export default async function showToast(
 	document.body.append(toast);
 	await delay(30); // Without this, the Toast doesn't appear in time
 
-	let finalToastMessage: string | false = 'Unknown error';
 	try {
 		if (task instanceof Error) {
 			throw task;
@@ -79,16 +90,14 @@ export default async function showToast(
 		}
 
 		toast.classList.replace('Toast--loading', 'Toast--success');
-		finalToastMessage = doneMessage;
+		// Use the last message if `false` was passed
+		void finalUpdateToast(doneMessage || lastRawMessage);
 		iconWrapper.firstChild!.replaceWith(<CheckIcon />);
 	} catch (error) {
 		assertError(error);
 		toast.classList.replace('Toast--loading', 'Toast--error');
-		finalToastMessage = error.message;
+		void finalUpdateToast(error);
 		iconWrapper.firstChild!.replaceWith(<StopIcon />);
 		throw error;
-	} finally {
-		// Use the last message if `false` was passed
-		void finalUpdateToast(finalToastMessage || messageWrapper.textContent);
 	}
 }

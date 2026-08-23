@@ -1,19 +1,38 @@
 import './quick-mention.css';
 
-import React from 'dom-chef';
-import {$} from 'select-dom/strict.js';
-import {elementExists} from 'select-dom';
-import ReplyIcon from 'octicons-plain-react/Reply';
-import * as pageDetect from 'github-url-detection';
-import {insertTextIntoField} from 'text-field-edit';
 import delegate, {type DelegateEvent} from 'delegate-it';
+import React from 'dom-chef';
+import * as pageDetect from 'github-url-detection';
+import ReplyIcon from 'octicons-plain-react/Reply';
+import {$, closestElement, elementExists} from 'select-dom';
+import {insertTextIntoField} from 'text-field-edit';
 
-import {wrap} from '../helpers/dom-utils.js';
 import features from '../feature-manager.js';
-import {getUsername, isArchivedRepoAsync} from '../github-helpers/index.js';
-import observe from '../helpers/selector-observer.js';
+import getCommentAuthor from '../github-helpers/get-comment-author.js';
+import {getLoggedInUser, isArchivedRepoAsync} from '../github-helpers/index.js';
+import {legacyCommentField} from '../github-helpers/selectors.js';
+import {is} from '../helpers/css-selectors.js';
+import {wrap} from '../helpers/dom-utils.js';
+import observe, {waitForElement} from '../helpers/selector-observer.js';
+import {withTooltipRef} from '../components/tooltip.js';
 
-const fieldSelector = 'textarea#new_comment_field';
+const fieldSelector = [
+	legacyCommentField,
+	'#react-issue-comment-composer textarea',
+] as const;
+
+const loggedInUser = getLoggedInUser()!;
+
+const prAvatarSelector = '.js-quote-selection-container '
+	+ is(
+		// `:first-child` avoids app badges #2630
+		'div.TimelineItem-avatar > [data-hovercard-type="user"]:first-child', // Comment
+		'a.TimelineItem-avatar', // Review or PR body
+	)
+	+ `:not([href="/${loggedInUser}"])`;
+
+const issueAvatarSelector
+	= `a[class^="Avatar-module__avatarLink"][class*="avatarOuter"]:not([href$="/${loggedInUser}"])`;
 
 function prefixUserMention(userMention: string): string {
 	// The alt may or may not have it #4859
@@ -21,7 +40,7 @@ function prefixUserMention(userMention: string): string {
 }
 
 function mentionUser({delegateTarget: button}: DelegateEvent): void {
-	const userMention = button.parentElement!.querySelector('img')!.alt;
+	const userMention = getCommentAuthor(button.parentElement!);
 	const newComment = $(fieldSelector);
 	newComment.focus();
 
@@ -36,34 +55,35 @@ function mentionUser({delegateTarget: button}: DelegateEvent): void {
 	insertTextIntoField(newComment, `${spacer}${prefixUserMention(userMention)} `);
 }
 
-const debug = false;
+function addButton(avatar: HTMLElement): void {
+	const userMention = getCommentAuthor(avatar);
+	avatar.after(
+		<button
+			ref={withTooltipRef({
+				label: `Mention ${prefixUserMention(userMention)} in a new comment`,
+				direction: 'e',
+			})}
+			type="button"
+			className="rgh-quick-mention btn-link"
+		>
+			<ReplyIcon />
+		</button>,
+	);
+}
 
-function add(avatar: HTMLElement): void {
-	if (debug) {
-		avatar.style.border = 'solid 5px black';
-	}
-
-	const timelineItem = avatar.closest([
+function addButtonPr(avatar: HTMLElement): void {
+	const timelineItem = closestElement([
 		// Regular comments
 		'.js-comment-container',
-
 		// Reviews
 		'.js-comment',
-	])!;
-	if (debug) {
-		timelineItem.style.border = 'solid 5px red';
-	}
+	], avatar);
 
 	if (
-		// TODO: Rewrite with :has()
 		// Exclude events that aren't tall enough, like hidden comments or reviews without comments
 		!elementExists('.unminimized-comment, .js-comment-container', timelineItem)
 	) {
 		return;
-	}
-
-	if (debug) {
-		timelineItem.style.border = 'solid 5px green';
 	}
 
 	// Wrap avatars next to review events so the inserted button doesn't break the layout #4844
@@ -72,42 +92,39 @@ function add(avatar: HTMLElement): void {
 		wrap(avatar, <div className="avatar-parent-child TimelineItem-avatar d-none d-md-block" />);
 	}
 
-	const userMention = $('img', avatar).alt;
-	avatar.after(
-		<button
-			type="button"
-			className="rgh-quick-mention tooltipped tooltipped-e btn-link"
-			aria-label={`Mention ${prefixUserMention(userMention)} in a new comment`}
-		>
-			<ReplyIcon />
-		</button>,
-	);
+	addButton(avatar);
 }
 
-async function init(signal: AbortSignal): Promise<void> {
-	if (await isArchivedRepoAsync()) {
+function addButtonIssue(avatar: HTMLElement): void {
+	const isHidden = !elementExists('.markdown-body', avatar.parentElement!);
+	if (isHidden) {
 		return;
 	}
 
+	avatar.style.height = 'auto';
+	avatar.classList.add('react-view');
+	wrap(avatar, <div className="avatar-parent-child d-none d-md-block" />);
+
+	addButton(avatar);
+}
+
+async function init(signal: AbortSignal): Promise<void> {
 	delegate('button.rgh-quick-mention', 'click', mentionUser, {signal});
 
-	// `:first-child` avoids app badges #2630
-	// The hovercard attribute avoids `highest-rated-comment`
-	// Avatars next to review events aren't wrapped in a <div> #4844
-	// :has(fieldSelector) enables the feature only when/after the "mention" button can actually work
-	// .js-quote-selection-container selects the closest parent that contains both the new comment field and the avatar #7378
-	observe(`
-		.js-quote-selection-container:has(${fieldSelector})
-		:is(
-			div.TimelineItem-avatar > [data-hovercard-type="user"]:first-child,
-			a.TimelineItem-avatar
-		):not([href="/${getUsername()!}"])
-	`, add, {signal});
+	if (pageDetect.isPR()) {
+		observe(prAvatarSelector, addButtonPr, {signal});
+	} else {
+		observe(issueAvatarSelector, addButtonIssue, {signal});
+	}
 }
 
 void features.add(import.meta.url, {
 	include: [
 		pageDetect.isConversation,
+	],
+	exclude: [
+		async () => !await waitForElement(fieldSelector),
+		isArchivedRepoAsync,
 	],
 	init,
 });

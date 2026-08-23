@@ -1,33 +1,46 @@
-import sucrase from '@rollup/plugin-sucrase';
-import resolve from '@rollup/plugin-node-resolve';
-import commonjs from '@rollup/plugin-commonjs';
-import cleanup from 'rollup-plugin-cleanup';
-import styles from 'rollup-plugin-styles';
-import {string} from 'rollup-plugin-string';
 import alias from '@rollup/plugin-alias';
+import commonjs from '@rollup/plugin-commonjs';
 import json from '@rollup/plugin-json';
+import resolve from '@rollup/plugin-node-resolve';
+import sucrase from '@rollup/plugin-sucrase';
+import browserslist from 'browserslist';
+import {browserslistToTargets, Features} from 'lightningcss';
+import process from 'node:process';
+import cleanup from 'rollup-plugin-cleanup';
 import copy from 'rollup-plugin-copy';
 import del from 'rollup-plugin-delete';
-import webpackStatsPlugin from 'rollup-plugin-webpack-stats';
+import {string} from 'rollup-plugin-string';
+import styles from 'rollup-plugin-styler';
 import svelte from 'rollup-plugin-svelte';
+import webpackStatsPlugin from 'rollup-plugin-webpack-stats';
 import lightning from 'unplugin-lightningcss/rollup';
-import {Features} from 'lightningcss';
 
 import svelteConfig from './svelte.config.js';
 
-const noise = new Set(['index', 'dist', 'src', 'source', 'distribution', 'node_modules', 'main', 'esm', 'cjs', 'build', 'built']);
+const noise = new Set([
+	'index',
+	'dist',
+	'src',
+	'source',
+	'distribution',
+	'node_modules',
+	'main',
+	'esm',
+	'cjs',
+	'build',
+	'built',
+]);
 
 /** @type {import('rollup').RollupOptions} */
 const rollup = {
 	input: {
-		'options': './source/options.tsx',
-		'welcome': './source/welcome.svelte',
-		'header': './source/options/header.svelte',
-		'storage-usage': './source/options/storage-usage.svelte',
-		'background': './source/background.ts',
+		options: './source/options.tsx',
+		welcome: './source/welcome.svelte',
+		graphql: './source/graphql.svelte',
+
 		'refined-github': './source/refined-github.ts',
 		'content-script': './source/content-script.ts',
-		'resolve-conflicts': './source/resolve-conflicts.ts',
+		background: './source/background.ts',
 	},
 	output: {
 		dir: 'distribution/assets',
@@ -50,8 +63,23 @@ const rollup = {
 		clearScreen: false,
 	},
 
-	// TODO: Drop after https://github.com/sindresorhus/memoize/issues/102
+	// TODO: Drop after https://github.com/fregante/webext-options-sync-per-domain/issues/17
 	context: 'globalThis',
+	onwarn(warning, defaultHandler) {
+		if (
+			warning.code === 'CIRCULAR_DEPENDENCY'
+			&& warning.ids?.every(id => id.includes('/svelte/'))
+		) {
+			return;
+		}
+
+		// Fail the build immediately on unresolved dependencies. How is this not a default?!
+		if (warning.code === 'UNRESOLVED_IMPORT') {
+			throw new Error(warning.message);
+		}
+
+		defaultHandler(warning);
+	},
 
 	plugins: [
 		del({
@@ -61,6 +89,8 @@ const rollup = {
 		lightning({
 			options: {
 				include: Features.Nesting,
+				// Lighting issue: https://github.com/parcel-bundler/lightningcss/issues/826#issuecomment-2453982986
+				targets: browserslistToTargets(browserslist('chrome 123, firefox 126, iOS 17.5')),
 			},
 		}),
 		svelte(svelteConfig),
@@ -91,7 +121,7 @@ const rollup = {
 		copy({
 			targets: [
 				{src: './source/manifest.json', dest: 'distribution'},
-				{src: './source/*.+(html|png)', dest: 'distribution/assets'},
+				{src: './source/*.+(html|png|js)', dest: 'distribution/assets'},
 			],
 		}),
 		cleanup(),

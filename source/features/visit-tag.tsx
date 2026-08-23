@@ -1,37 +1,41 @@
-import React from 'react';
-import {elementExists} from 'select-dom';
+import * as pageDetect from 'github-url-detection';
 import ArrowUpRightIcon from 'octicons-plain-react/ArrowUpRight';
 import CodeIcon from 'octicons-plain-react/Code';
-import * as pageDetect from 'github-url-detection';
+import React from 'dom-chef';
+import {elementExists} from 'select-dom';
 
-import {branchSelector} from '../github-helpers/selectors.js';
 import features from '../feature-manager.js';
-import observe from '../helpers/selector-observer.js';
+import {buildRepoUrl} from '../github-helpers/index.js';
+import {branchSelector} from '../github-helpers/selectors.js';
+import {is} from '../helpers/css-selectors.js';
 import {wrapAll} from '../helpers/dom-utils.js';
-import {buildRepoURL} from '../github-helpers/index.js';
+import observe from '../helpers/selector-observer.js';
 
-async function addLink(branchSelector: HTMLButtonElement): Promise<void> {
-	if (elementExists([
-		// If the branch picker is open, do nothing #7491
-		'#selectPanel',
+async function addLink(branchSelectorElement: HTMLButtonElement): Promise<void> {
+	if (
+		elementExists([
+			// If the branch picker is open, do nothing #7491
+			'#selectPanel',
 
-		// React view deduplication https://github.com/refined-github/refined-github/issues/7601
-		'.rgh-visit-tag',
-	])) {
+			// React view deduplication https://github.com/refined-github/refined-github/issues/7601
+			'.rgh-visit-tag',
+		])
+	) {
 		return;
 	}
 
-	const tag = branchSelector.getAttribute('aria-label')?.replace(/ tag$/, '');
+	// Uses optional chaining to emit a better error manually
+	const tag = branchSelectorElement.getAttribute('aria-label')?.replace(/ tag$/, '');
 	if (!tag) {
 		throw new Error('Tag not found in DOM. The feature needs to be updated');
 	}
 
 	wrapAll(
 		<div className="d-flex gap-2" />,
-		branchSelector,
+		branchSelectorElement,
 		<a
-			className="btn px-2 tooltipped tooltipped-se rgh-visit-tag"
-			href={buildRepoURL('releases/tag', tag)}
+			className="btn px-2 tmp-px-2 tooltipped tooltipped-se rgh-visit-tag"
+			href={buildRepoUrl('releases/tag', tag)}
 			aria-label="Visit tag"
 		>
 			<ArrowUpRightIcon />
@@ -49,7 +53,7 @@ function clarifyIcon(signal: AbortSignal): void {
 }
 
 function init(signal: AbortSignal): void {
-	observe(`:is(${branchSelector}):has(.octicon-tag)`, addLink, {signal});
+	observe(is(branchSelector) + ':has(.octicon-tag)', addLink, {signal});
 }
 
 void features.add(import.meta.url, {

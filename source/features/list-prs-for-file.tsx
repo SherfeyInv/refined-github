@@ -1,27 +1,26 @@
 import React from 'dom-chef';
-import {CachedFunction} from 'webext-storage-cache';
-import {isFirefox} from 'webext-detect';
 import * as pageDetect from 'github-url-detection';
 import AlertIcon from 'octicons-plain-react/Alert';
 import GitPullRequestIcon from 'octicons-plain-react/GitPullRequest';
+import {isFirefox} from 'webext-detect';
+import {CachedFunction} from 'webext-storage-cache';
 
 import features from '../feature-manager.js';
 import api from '../github-helpers/api.js';
 import getDefaultBranch from '../github-helpers/get-default-branch.js';
-import {buildRepoURL, cacheByRepo} from '../github-helpers/index.js';
-import GitHubFileURL from '../github-helpers/github-file-url.js';
+import GitHubFileUrl from '../github-helpers/github-file-url.js';
+import {buildRepoUrl, cacheByRepo} from '../github-helpers/index.js';
 import observe from '../helpers/selector-observer.js';
 import listPrsForFileQuery from './list-prs-for-file.gql';
-import {expectToken} from '../github-helpers/github-token.js';
 
-function getPRUrl(prNumber: number): string {
+function getPrUrl(prNumber: number): string {
 	// https://caniuse.com/url-scroll-to-text-fragment
-	const hash = isFirefox() ? '' : `#:~:text=${new GitHubFileURL(location.href).filePath}`;
-	return buildRepoURL('pull', prNumber, 'files') + hash;
+	const hash = isFirefox() ? '' : `#:~:text=${new GitHubFileUrl(location.href).filePath}`;
+	return buildRepoUrl('pull', prNumber, 'files') + hash;
 }
 
 function getHovercardUrl(prNumber: number): string {
-	return buildRepoURL('pull', prNumber, 'hovercard');
+	return buildRepoUrl('pull', prNumber, 'hovercard');
 }
 
 const buttonId = 'rgh-list-prs-for-file-';
@@ -54,7 +53,7 @@ function getDropdown(prs: number[]): HTMLElement {
 				popover="auto"
 			>
 				<div className="Overlay Overlay--size-auto">
-					<div className="px-3 pt-3 h6 color-fg-muted">
+					<div className="px-3 tmp-px-3 pt-3 tmp-pt-3 h6 color-fg-muted">
 						File also being edited in
 					</div>
 					<ul className="ActionListWrap ActionListWrap--inset">
@@ -62,7 +61,7 @@ function getDropdown(prs: number[]): HTMLElement {
 							<li className="ActionListItem">
 								<a
 									className="ActionListContent js-hovercard-left"
-									href={getPRUrl(prNumber)}
+									href={getPrUrl(prNumber)}
 									data-hovercard-url={getHovercardUrl(prNumber)}
 								>
 									#{prNumber}
@@ -79,7 +78,7 @@ function getDropdown(prs: number[]): HTMLElement {
 /**
 @returns prsByFile {"filename1": [10, 3], "filename2": [2]}
 */
-const getPrsByFile = new CachedFunction('files-with-prs', {
+const prsByFileCache = new CachedFunction('files-with-prs', {
 	async updater(): Promise<Record<string, number[]>> {
 		const {repository} = await api.v4(listPrsForFileQuery, {
 			variables: {
@@ -106,17 +105,18 @@ const getPrsByFile = new CachedFunction('files-with-prs', {
 });
 
 async function add(anchor: HTMLElement): Promise<false | void> {
-	const path = new GitHubFileURL(location.href).filePath;
-	const prsByFile = await getPrsByFile.get();
+	const path = new GitHubFileUrl(location.href).filePath;
+	const prsByFile = await prsByFileCache.get();
 	let prs = prsByFile[path];
 
 	if (!prs) {
 		return;
 	}
 
-	const editingPRNumber = new URLSearchParams(location.search).get('pr')?.split('/').slice(-1);
-	if (editingPRNumber) {
-		prs = prs.filter(pr => pr !== Number(editingPRNumber));
+	// Only appears when editing files from PRs
+	const editingPrNumber = new URLSearchParams(location.search).get('pr')?.split('/').slice(-1);
+	if (editingPrNumber) {
+		prs = prs.filter(pr => pr !== Number(editingPrNumber));
 		if (prs.length === 0) {
 			return;
 		}
@@ -134,12 +134,15 @@ async function add(anchor: HTMLElement): Promise<false | void> {
 }
 
 async function init(signal: AbortSignal): Promise<void> {
-	await expectToken();
-
-	observe([
-		'[aria-label="More file actions"]', // `isSingleFile`
-		'[data-hotkey="Mod+s"]', // `isEditingFile`
-	], add, {signal});
+	observe(
+		[
+			'[data-testid="more-file-actions-button-nav-menu-wide"]', // `isSingleFile`
+			'[data-testid="more-file-actions-button-nav-menu-narrow"]', // `isSingleFile`
+			'[data-hotkey="Mod+s"]', // `isEditingFile`
+		],
+		add,
+		{signal},
+	);
 }
 
 void features.add(import.meta.url, {
@@ -147,6 +150,7 @@ void features.add(import.meta.url, {
 		pageDetect.isSingleFile,
 		pageDetect.isEditingFile,
 	],
+	requiresToken: true,
 	init,
 });
 

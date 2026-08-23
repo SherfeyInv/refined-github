@@ -1,5 +1,3 @@
-import pDefer from 'p-defer';
-
 async function* createEventIterator<T extends Event>(
 	element: EventTarget,
 	eventName: string,
@@ -9,12 +7,12 @@ async function* createEventIterator<T extends Event>(
 	} = {},
 ): AsyncGenerator<T> {
 	const queue: T[] = [];
-	let deferred = pDefer<void>();
+	let deferred = Promise.withResolvers<void>();
 
 	const handler = (event: Event): void => {
 		queue.push(event as T);
 		deferred.resolve();
-		deferred = pDefer();
+		deferred = Promise.withResolvers<void>();
 	};
 
 	try {
@@ -25,6 +23,7 @@ async function* createEventIterator<T extends Event>(
 				// eslint-disable-next-line no-await-in-loop
 				await deferred.promise;
 			}
+
 			yield queue.shift()!;
 
 			if (once) {
